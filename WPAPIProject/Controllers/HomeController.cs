@@ -338,6 +338,19 @@ namespace WPAPIProject.Controllers
                         continue;
                     }
 
+                    string checkQuery = $@"SELECT COUNT(*) FROM {tableName} WHERE TELEFONNO = @TELEFONNO";
+
+                    using (SqlCommand checkCommand = new(checkQuery, connection))
+                    {
+                        checkCommand.Parameters.AddWithValue("@TELEFONNO", row["TELEFONNO"]);
+
+                        int count = (int)checkCommand.ExecuteScalar();
+                        if (count > 0)
+                        {
+                            continue;
+                        }
+                    }
+
                     var columnNames = new List<string>();
                     var parameterNames = new List<string>();
                     var parameters = new Dictionary<string, object>();

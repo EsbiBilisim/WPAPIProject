@@ -179,7 +179,7 @@
             $('#confirmationModal').modal('show');
         }
 
-                function getir() {
+        function getir() {
             var kl = $("#kl").val();
             $.ajax({
                 url: '/Home/FirmaMusterileriGetir',
@@ -398,7 +398,7 @@
             });
         }
 
-                function duzenleGridi(dataGrid) {
+        function duzenleGridi(dataGrid) {
             var selectedRowsData = dataGrid.getSelectedRowsData();
             if (selectedRowsData.length == 0) {
                 alert("Satır Seçiniz!");
