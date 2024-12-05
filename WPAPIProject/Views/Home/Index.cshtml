@@ -1,0 +1,599 @@
+﻿@using WPAPIProject.Logic.Interfaces
+@inject ISqls sql;
+@{
+    ViewData["Title"] = "Home";
+
+    var kullanici = sql.KullaniciGetir("Kullanici");
+    var kullaniciId = kullanici.ID;
+}
+
+<style>
+    .dx-datagrid-group-panel, .dx-group-panel-message {
+        color: rebeccapurple !important;
+    }
+
+    .dx-row dx-column-lines, .dx-header-row {
+        color: red;
+        font-weight: bold;
+    }
+
+    input:focus, select:focus, textarea:focus {
+        outline: none !important;
+        box-shadow: 0 0 5px rgba(0, 123, 255, 0.5) !important;
+        border-color: #007bff !important;
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .file-upload-container {
+        text-align: right;
+    }
+
+    .file-upload-container .form-label {
+        display: block;
+        margin-bottom: 5px;
+    }
+
+    .file-upload-container .form-control {
+        flex: 1;
+    }
+
+    .file-upload-container .d-flex {
+        gap: 10px;
+    }
+
+</style>
+
+<input type="hidden" id="kl" value="@kullaniciId" />
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title" style="color:red;">Müşteriler</h5>
+        <div class="file-upload-container">
+            <label for="file" class="form-label" style="text-align:left; font-size: 14px; color: red;">Müşteri Eklemek için Excel Dosyanızı Yükleyiniz</label>
+            <div class="d-flex align-items-center">
+                <input type="file" id="file" name="file" class="form-control-file" style="background-color: skyblue; padding:2px;" accept=".xls, .xlsx" />
+                <button id="uploadButton" class="btn btn-primary">Yükle</button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="firmaYetkiliTelefon" style="margin-bottom:15px;"></div>
+
+        <span class="headers">Mesaj</span>
+        <textarea class="form-control" id="aciklama" style="height:100px;" placeholder="Lütfen bir dosya yükleyin veya mesaj girin."></textarea>
+    </div>
+    <div class="card-footer" style="display:flex; justify-content:flex-end;">
+        <input type="file" id="istekDosya" class="form-control-file" style="background-color: skyblue; padding:2px;" multiple accept=".pdf,image/*">
+        <button class="btn btn-success" style="margin-right:10px; margin-left:10px;" onclick="openConfirmationModal()">Gönder</button>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmationModal" tabindex="-1" role="dialog" aria-labelledby="confirmationModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="min-width:65%;">
+        <div class="modal-content">
+            <div class="modal-header bg-success">
+                <div style="display: flex; justify-content:flex-start; align-items: center;">
+                    <button type="button" class="btn btn-primary" onclick="confirmSend()" style="margin-right:10px;">Evet</button>
+                    <button type="button" class="btn btn-warning" data-dismiss="modal">Hayır</button>
+                </div>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="totalSelectedContacts"></p>
+                <p><strong>Seçilenler:</strong></p>
+                <div id="selectedContacts" style="max-height:300px; overflow-y:scroll; padding:5px; margin-bottom:15px; border:1px solid;"></div>
+                <p><strong>Açıklama:</strong> <span id="selectedDescription"></span></p>
+                <p>Onaylıyor Musunuz?</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modal_editModal" class="modal" tabindex="-1" data-backdrop="static" data-keyboard="false" role="dialog">
+    <div class="modal-dialog" style="min-width:65%;">
+        <div class="modal-content">
+            <div class="modal-header bg-success">
+                Düzenle
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="editGrid"></div>
+            </div>
+            <div class="modal-footer" style="margin-top:25px;">
+                <button type="button" class="btn btn-success" onclick="duzenleKaydet()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script>
+
+        $(document).ready(function () {
+            $('#aciklama').val("");
+
+             getir();
+
+             $('#uploadButton').click(function(e) {
+            e.preventDefault();
+
+            var fileInput = $('#file')[0];
+            var formData = new FormData();
+
+            if (fileInput.files.length > 0) {
+                formData.append("file", fileInput.files[0]);
+
+                $.ajax({
+                    url: '/Home/Upload',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function(response) {
+                        if (response.sonuc) {
+                            alert(response.mesaj);
+                            getir();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        var response = xhr.responseJSON;
+                        if (response) {
+                            alert(response.mesaj);
+                        } else {
+                            alert(response.mesaj);
+                        }
+                    }
+                });
+            } else {
+                     $('#responseMessage').html('<div class="alert alert-warning">Lütfen bir dosya seçin.</div>');
+                }
+            });
+        });
+
+        function openConfirmationModal() {
+            var selectedData = $('#firmaYetkiliTelefon').dxDataGrid('instance').getSelectedRowsData();
+            if (selectedData.length === 0) {
+                alert("Seçim Yapınız!");
+                return;
+            }
+
+            var aciklama = $("#aciklama").val();
+
+            var selectedContactsHTML = '<ul>';
+            selectedData.forEach(function (item) {
+                selectedContactsHTML += '<li>' + item.ADSOYAD + ' (' + item.TELEFONNO + ', ' + item.ISGRUBU + ')</li>';
+            });
+            selectedContactsHTML += '</ul>';
+
+            $('#selectedContacts').html(selectedContactsHTML);
+            $('#selectedDescription').text(aciklama);
+
+            var totalContacts = selectedData.length;
+            $('#totalSelectedContacts').text('Toplam Seçilen Kişi Sayısı: ' + totalContacts);
+
+            $('#confirmationModal').modal('show');
+        }
+
+                function getir() {
+            var kl = $("#kl").val();
+            $.ajax({
+                url: '/Home/FirmaMusterileriGetir',
+                method: 'GET',
+                success: function (response) {
+                    var obj = response.data.data;
+
+                    for (var i = 0; i < obj.length; i++) {
+                        var fields = ['EKLENMETARIHI'];
+                        for (var j = 0; j < fields.length; j++) {
+                            var field = fields[j];
+                            if (obj[i][field]) {
+                                var tarih = new Date(obj[i][field]);
+                                obj[i][field] = tarih;
+                            }
+                        }
+                    }
+
+                    var kayitSayisi = obj.length;
+                    $("#total").text("(" + kayitSayisi + ")");
+
+                    $("#firmaYetkiliTelefon").dxDataGrid({
+                        dataSource: obj,
+                        keyExpr: "ID",
+                        allowColumnResizing: true,
+                        columnResizingMode: "widget",
+                        showBorders: true,
+                        allowColumnReordering: true,
+                        sorting: {
+                            mode: "multiple"
+                        },
+                        showRowLines: true,
+                        paging: {
+                            enabled: true,
+                            size: 250
+                        },
+                        pager: {
+                            showPageSizeSelector: true,
+                            allowedPageSizes: [10, 20, 50,100],
+                            showNavigationButtons: true,
+                        },
+                        searchPanel: {
+                            visible: true,
+                            highlightCaseSensitive: true,
+                        },
+                        columnChooser: {
+                            enabled: true,
+                            mode: "select"
+                        },
+                        selection: {
+                            mode: 'multiple'
+                        },
+                        onEditorPreparing: function (e) {
+                            if (e.parentType === "filterRow" && (e.dataField === "KULLANICIADI" || e.dataField === "KULLANICISOYADI" || e.dataField === "ISGRUBU")) {
+                                e.editorOptions.onValueChanged = function (args) {
+                                    var value = args.value;
+                                    var upperCaseValue = value.replace(/i/g, 'İ').replace(/ı/g, 'I').toUpperCase();
+                                    e.setValue(upperCaseValue);
+                                }
+                            }
+                        },
+                        columnAutoWidth: true,
+                        width: '100%',
+                        focusedRowEnabled: true,
+                        columns: [
+                            {
+                                dataField: "ID",
+                                caption: "ID",
+                                visible: false,
+                            },
+                            {
+                                dataField: "EKLENMETARIHI",
+                                caption: "Kayıt Tarihi",
+                                format: 'dd.MM.yyyy HH:mm:ss'
+                            },
+                            {
+                                dataField: "ADSOYAD",
+                                caption: "Ad Soyad",
+                            },
+                            {
+                                dataField: "TELEFONNO",
+                                caption: "Telefon",
+                            },
+                            {
+                                dataField: "ISGRUBU",
+                                caption: "İş Grubu",
+                            }
+                        ],
+                        height: '55vh',
+                        filterRow: {
+                            visible: true,
+                        },
+                        headerFilter: {
+                            visible: true,
+                        },
+                        groupPanel: {
+                            visible: true
+                        },
+                        export: {
+                            enabled: true,
+                        },
+                        onContextMenuPreparing: function (e) {
+                            if (e.row.rowType === "data") {
+                                e.items = [
+                                {
+                                    text: "Düzenle",
+                                    onItemClick: function () {
+                                        duzenleGridi(e.component);
+                                    }
+                                },
+                                {
+                                    text: "Ekle",
+                                    onItemClick: function () {
+                                         ekle(e.component);
+                                    }
+                                },
+                                {
+                                    text: "Sil",
+                                    onItemClick: function () {
+                                         sil(e.component);
+                                    }
+                                },
+                                ];
+                            }
+                        },
+                        stateStoring: {
+                            enabled: true,
+                            type: "localStorage",
+                            storageKey: "FirmaYetkiliTelWpMesaj-" + kl,
+                            customLoad: function () {
+                                var state = localStorage.getItem(this.storageKey);
+                                if (state) {
+                                    state = JSON.parse(state);
+                                    for (var i = 0; i < state.columns.length; i++) {
+                                        state.columns[i].filterValue = null;
+                                    }
+                                    state.selectedRowKeys = null;
+                                }
+                                return state;
+                            },
+                            customSave: function (state) {
+                                localStorage.setItem(this.storageKey, JSON.stringify(state));
+                            },
+                        },
+                        onExporting: function (e) {
+                            var workbook = new ExcelJS.Workbook();
+                            var worksheet = workbook.addWorksheet('Müşteriler');
+                            DevExpress.excelExporter.exportDataGrid({
+                                worksheet: worksheet,
+                                component: e.component,
+                                customizeCell: function (options) {
+                                    var excelCell = options;
+                                    excelCell.font = {
+                                        name: 'Arial',
+                                        size: 12
+                                    };
+                                    excelCell.alignment = {
+                                        horizontal: 'left'
+                                    };
+                                }
+                            }).then(function () {
+                                workbook.xlsx.writeBuffer().then(function (buffer) {
+                                    saveAs(new Blob([buffer], {
+                                        type: 'application/octet-stream'
+                                    }), 'Müşteriler.xlsx');
+                                });
+                            });
+                            e.cancel = true;
+                        },
+                    });
+                }
+            });
+        }
+
+        function confirmSend() {
+            $('#confirmationModal').modal('hide');
+            sendRequest();
+        }
+
+        function sendRequest() {
+            showPleaseWait();
+            var selectedData = $('#firmaYetkiliTelefon').dxDataGrid('instance').getSelectedRowsData();
+            var fileUpload = $("#istekDosya").get(0);
+            var files = fileUpload.files;
+
+            var aciklama = $('#aciklama').val();
+            if (files.length === 0 && (!aciklama || aciklama.trim() === "")) {
+                hidePleaseWait();
+                alert("Lütfen bir dosya yükleyin veya mesaj girin.");
+                return;
+            }
+
+            var fileData = new FormData();
+            for (var i = 0; i < files.length; i++) {
+                fileData.append('files', files[i]);
+            }
+            fileData.append('aciklama', aciklama);
+            fileData.append('selectedData', JSON.stringify(selectedData));
+
+            $.ajax({
+                url: '/Home/MusteriWpMesajGonder',
+                method: 'POST',
+                contentType: false,
+                processData: false,
+                data: fileData,
+                success: function (response) {
+                    if (response.Sonuc === true) {
+                        hidePleaseWait();
+                        alert(response.Msg);
+                        window.location.reload();
+                    } else {
+                        hidePleaseWait();
+                        alert(response.Msg);
+                    }
+                },
+            });
+        }
+
+                function duzenleGridi(dataGrid) {
+            var selectedRowsData = dataGrid.getSelectedRowsData();
+            if (selectedRowsData.length == 0) {
+                alert("Satır Seçiniz!");
+                return;
+            }
+            else {
+                $("#modal_editModal").modal('show');
+                $("#editGrid").dxDataGrid({
+                    dataSource: selectedRowsData,
+                    columns:  [
+                            {
+                                dataField: "ID",
+                                caption: "ID",
+                                visible: false,
+                                allowEditing: false
+                            },
+                            {
+                                dataField: "EKLENMETARIHI",
+                                caption: "Eklenme Tarihi",
+                                visible: true,
+                                allowEditing: false
+                            },
+                            {
+                                dataField: "ADSOYAD",
+                                caption: "Ad Soyad",
+                                visible: true,
+                            },
+                            {
+                                dataField: "TELEFONNO",
+                                caption: "Telefon",
+                                visible: true,
+                                editorOptions: {
+                                    onInput: function (e) {
+                                        var value = e.event.target.value;
+
+                                        value = value.replace(/\D/g, '');
+
+                                        if (!value.startsWith('90')) {
+                                            value = '90' + value.slice(2);
+                                        }
+
+                                        value = value.slice(0, 12);
+
+                                        e.event.target.value = value;
+                                    }
+                                },
+                                validationRules: [{
+                                    type: "pattern",
+                                    pattern: /^\90\d{10}$/,
+                                    message: "Telefon numarası 90XXXXXXXXXX formatında olmalıdır."
+                                }],
+                                allowEditing: true
+                            },
+                            {
+                                dataField: "ISGRUBU",
+                                caption: "İş Grubu",
+                                visible: true,
+                            },
+                    ],
+                    editing: {
+                        mode: "cell",
+                        allowUpdating: true,
+                        allowAdding: false
+                    },
+                    showRowLines: true,
+                });
+            }
+
+        }
+
+        function duzenleKaydet() {
+            showPleaseWait();
+            var dataGrid = $("#editGrid").dxDataGrid("instance");
+            var datas = dataGrid.getDataSource().items();
+
+            var isValid = true;
+            if (!isValid) {
+                hidePleaseWait();
+                return;
+            }
+
+            $.ajax({
+                url: '/Home/UpdateRecord',
+                method: 'POST',
+                data: JSON.stringify(datas),
+                contentType: 'application/json; charset=utf-8',
+                dataType: 'json',
+                success: function (response) {
+                    if (response.success) {
+                        alert(response.message);
+                        $("#modal_editModal").modal('hide');
+
+                        dataGrid.option('dataSource', []);
+                        getir();
+                    } else {
+                        alert("Güncelleme başarısız: " + response.message);
+                    }
+                },
+                error: function () {
+                    alert("Bir hata oluştu.");
+                },
+                complete: function() {
+                    hidePleaseWait();
+                }
+            });
+        }
+
+        function sil(component) {
+             if (typeof component.getSelectedRowKeys !== 'function') {
+                alert("Seçili kayıtları almak için geçerli bir bileşen bulunamadı.");
+                return;
+            }
+
+             var selectedRowKeys = component.getSelectedRowKeys();
+
+            if (selectedRowKeys.length > 0) {
+                 if (confirm("Seçili kayıtları silmek istediğinize emin misiniz?")) {
+                    var ids = selectedRowKeys;
+
+                    $.ajax({
+                         url: '/Home/DeleteRecord',
+                         method: 'POST',
+                         contentType: 'application/json',
+                         data: JSON.stringify(ids),
+                         success: function(response) {
+                             if (response.success) {
+                                 alert(response.message);
+                                 getir();
+                             } else {
+                                 alert("Silme başarısız: " + response.message);
+                             }
+                         },
+                         error: function(error) {
+                             alert("Bir hata oluştu.");
+                             console.error("Hata Detayı: ", error);
+                         }
+                     });
+                }
+            } else {
+                alert("Lütfen bir veya daha fazla satır seçin.");
+            }
+        }
+
+        function ekle() {
+            var yeniKullaniciAdiSoyadi = prompt("Kullanıcı Ad Soyad:");
+            var yeniIsGrubu = prompt("İş Grubu:");
+
+            var yeniTelefon = prompt("Telefon Numarası (90XXXXXXXXXX formatında):");
+
+            var telefonPattern = /^90\d{10}$/;
+
+            if (!telefonPattern.test(yeniTelefon)) {
+                alert("Telefon numarası geçersiz. Lütfen 90XXXXXXXXXX formatında girin.");
+                return;
+            } else {
+                alert("Telefon numarası geçerli.");
+            }
+
+            if (!yeniKullaniciAdiSoyadi || !yeniTelefon || !yeniIsGrubu) {
+                alert("Tüm alanları doldurmanız gerekmektedir.");
+                return;
+            }
+
+            var yeniKayit = {
+                ADSOYAD: yeniKullaniciAdiSoyadi,
+                TELEFONNO: yeniTelefon,
+                ISGRUBU: yeniIsGrubu
+            };
+
+            $.ajax({
+                url: '/Home/AddRecord',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(yeniKayit),
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        getir();
+                    } else {
+                        alert("Ekleme başarısız: " + response.message);
+                    }
+                },
+                error: function(error) {
+                    alert("Bir hata oluştu.");
+                    console.error("Hata Detayı: ", error);
+                }
+            });
+        }
+
+        $(window).on('beforeunload', function () {
+            let dataGrid = $("#firmaYetkiliTelefon").dxDataGrid("instance");
+            dataGrid.refresh();
+            dataGrid.clearSelection();
+            dataGrid.option("focusedRowIndex", -1);
+        });
+
+    </script>
+}
