@@ -472,7 +472,6 @@ namespace WPAPIProject.Controllers
 
                 string tableName = $"W_MESSAGES_{kullanici.FIRMID}";
 
-
                 var aciklama = Request.Form["aciklama"].ToString();
 
                 var selectedDataJson = Request.Form["selectedData"];
@@ -605,6 +604,8 @@ namespace WPAPIProject.Controllers
                         {
                             if (kisiyeOzelMesaj.Length <= 1024)
                             {
+                                string dosyaUrlBirlesik = string.Join(",", dosyaYollari);
+
                                 for (int i = 0; i < dosyaYollari.Count; i++)
                                 {
                                     var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
@@ -628,6 +629,50 @@ namespace WPAPIProject.Controllers
                                     request.AddJsonBody(payload);
 
                                     var response = await client.PostAsync<RestResponse>(request);
+
+                                    if (response != null && (response.IsSuccessful || response.StatusCode == 0))
+                                    {
+                                        Console.WriteLine($"API Yanıtı: {response.Content}");
+
+                                        var logList = new List<W_MESSAGES>();
+
+                                        foreach (var item in selectedData)
+                                        {
+                                            var log = new W_MESSAGES
+                                            {
+                                                MESAJTARIHI = DateTime.Now,
+                                                CUSTOMERID = item.ID,
+                                                ATILANMESAJ = kisiyeOzelMesaj,
+                                                ATILANMESAJURL = dosyaUrlBirlesik
+                                            };
+                                            logList.Add(log);
+                                        }
+
+                                        using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
+                                        {
+                                            connection.Open();
+
+                                            foreach (var yeniKayit in logList)
+                                            {
+                                                string query = $@"
+                            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
+                            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
+
+                                                using (var command = new SqlCommand(query, connection))
+                                                {
+                                                    command.Parameters.AddWithValue("@MESAJTARIHI", yeniKayit.MESAJTARIHI);
+                                                    command.Parameters.AddWithValue("@CUSTOMERID", yeniKayit.CUSTOMERID);
+                                                    command.Parameters.AddWithValue("@ATILANMESAJ", yeniKayit.ATILANMESAJ);
+                                                    command.Parameters.AddWithValue("@ATILANMESAJURL", yeniKayit.ATILANMESAJURL);
+                                                    command.ExecuteNonQuery();
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"API Hata: {response?.ErrorMessage}");
+                                    }
                                 }
                             }
                             else
@@ -657,50 +702,6 @@ namespace WPAPIProject.Controllers
                                     requestx.AddJsonBody(payloadx);
 
                                     var responsex = await clientx.PostAsync<RestResponse>(requestx);
-
-                                    if (responsex != null && (responsex.IsSuccessful || responsex.StatusCode == 0))
-                                    {
-                                        Console.WriteLine($"API Yanıtı: {responsex.Content}");
-
-                                        var logListx = new List<W_MESSAGES>();
-
-                                        foreach (var item in selectedData)
-                                        {
-                                            var log = new W_MESSAGES
-                                            {
-                                                MESAJTARIHI = DateTime.Now,
-                                                CUSTOMERID = item.ID,
-                                                ATILANMESAJ = kisiyeOzelMesaj,
-                                                ATILANMESAJURL = ""
-                                            };
-                                            logListx.Add(log);
-                                        }
-
-                                        using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
-                                        {
-                                            connection.Open();
-
-                                            foreach (var yeniKayit in logListx)
-                                            {
-                                                string query = $@"
-                            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
-                            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
-
-                                                using (var command = new SqlCommand(query, connection))
-                                                {
-                                                    command.Parameters.AddWithValue("@MESAJTARIHI", yeniKayit.MESAJTARIHI);
-                                                    command.Parameters.AddWithValue("@CUSTOMERID", yeniKayit.CUSTOMERID);
-                                                    command.Parameters.AddWithValue("@ATILANMESAJ", yeniKayit.ATILANMESAJ);
-                                                    command.Parameters.AddWithValue("@ATILANMESAJURL", yeniKayit.ATILANMESAJURL);
-                                                    command.ExecuteNonQuery();
-                                                }
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"API Hata: {responsex?.ErrorMessage}");
-                                    }
                                 }
 
                                 var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
@@ -737,7 +738,7 @@ namespace WPAPIProject.Controllers
                                             MESAJTARIHI = DateTime.Now,
                                             CUSTOMERID = item.ID,
                                             ATILANMESAJ = kisiyeOzelMesaj,
-                                            ATILANMESAJURL = ""
+                                            ATILANMESAJURL = dosyaUrlBirlesik
                                         };
                                         logList.Add(log);
                                     }
@@ -844,6 +845,7 @@ namespace WPAPIProject.Controllers
                     {
                         if (duzenlenmisAciklama.Length <= 1024)
                         {
+                            string dosyaUrlBirlesik = string.Join(",", dosyaYollari);
                             for (int i = 0; i < dosyaYollari.Count; i++)
                             {
                                 var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
@@ -881,7 +883,7 @@ namespace WPAPIProject.Controllers
                                             MESAJTARIHI = DateTime.Now,
                                             CUSTOMERID = item.ID,
                                             ATILANMESAJ = duzenlenmisAciklama,
-                                            ATILANMESAJURL = ""
+                                            ATILANMESAJURL = dosyaUrlBirlesik
                                         };
                                         logList.Add(log);
                                     }
@@ -939,51 +941,7 @@ namespace WPAPIProject.Controllers
 
                                 requestx.AddJsonBody(payloadx);
 
-                                var responsex = await clientx.PostAsync<RestResponse>(requestx);
-
-                                if (responsex != null && (responsex.IsSuccessful || responsex.StatusCode == 0))
-                                {
-                                    Console.WriteLine($"API Yanıtı: {responsex.Content}");
-
-                                    var logListx = new List<W_MESSAGES>();
-
-                                    foreach (var item in selectedData)
-                                    {
-                                        var log = new W_MESSAGES
-                                        {
-                                            MESAJTARIHI = DateTime.Now,
-                                            CUSTOMERID = item.ID,
-                                            ATILANMESAJ = duzenlenmisAciklama,
-                                            ATILANMESAJURL = ""
-                                        };
-                                        logListx.Add(log);
-                                    }
-
-                                    using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
-                                    {
-                                        connection.Open();
-
-                                        foreach (var yeniKayit in logListx)
-                                        {
-                                            string query = $@"
-                            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
-                            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
-
-                                            using (var command = new SqlCommand(query, connection))
-                                            {
-                                                command.Parameters.AddWithValue("@MESAJTARIHI", yeniKayit.MESAJTARIHI);
-                                                command.Parameters.AddWithValue("@CUSTOMERID", yeniKayit.CUSTOMERID);
-                                                command.Parameters.AddWithValue("@ATILANMESAJ", yeniKayit.ATILANMESAJ);
-                                                command.Parameters.AddWithValue("@ATILANMESAJURL", yeniKayit.ATILANMESAJURL);
-                                                command.ExecuteNonQuery();
-                                            }
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"API Hata: {responsex?.ErrorMessage}");
-                                }
+                                var responsex = await clientx.PostAsync<RestResponse>(requestx);                               
                             }
 
                             var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
@@ -1020,7 +978,7 @@ namespace WPAPIProject.Controllers
                                         MESAJTARIHI = DateTime.Now,
                                         CUSTOMERID = item.ID,
                                         ATILANMESAJ = duzenlenmisAciklama,
-                                        ATILANMESAJURL = ""
+                                        ATILANMESAJURL = dosyaUrlBirlesik
                                     };
                                     logList.Add(log);
                                 }

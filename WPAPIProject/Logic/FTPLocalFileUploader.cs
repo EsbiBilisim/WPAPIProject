@@ -10,7 +10,7 @@ namespace WPAPIProject.Logic
         public string UploadToServer(byte[] file, string fileName, string fileExtension, int firmId)
         {
             string root = @"ftp://10.0.54.32:21/";
-            string filePath = $"{ToUrlSlug(fileName)}.{fileExtension}";
+            string filePath = $"{ToUrlSlug(fileName)}{fileExtension}";
             string filePathUpdated = root + $"/WPAPIProject/{firmId}/" + filePath;
 
             CreateFtpDirectory(root, $"WPAPIProject/{firmId}");
