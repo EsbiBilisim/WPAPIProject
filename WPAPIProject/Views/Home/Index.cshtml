@@ -160,6 +160,8 @@
 
         $(document).ready(function () {
             $('#aciklama').val("");
+             $('#istekDosya').val("");
+              $('#file').val("");
 
              getir();
 
@@ -396,12 +398,12 @@
                             enabled: true,
                         },
                         onContextMenuPreparing: function (e) {
-                            if (e.row.rowType === "data") {
+                            if (e.target == "content") {
                                 e.items = [
                                 {
-                                    text: "Düzenle",
+                                    text: "Sil",
                                     onItemClick: function () {
-                                        duzenleGridi(e.component);
+                                         sil(e.component);
                                     }
                                 },
                                 {
@@ -411,9 +413,9 @@
                                     }
                                 },
                                 {
-                                    text: "Sil",
+                                    text: "Düzenle",
                                     onItemClick: function () {
-                                         sil(e.component);
+                                        duzenleGridi(e.component);
                                     }
                                 },
                                 ];
@@ -515,7 +517,7 @@
         function duzenleGridi(dataGrid) {
             var selectedRowsData = dataGrid.getSelectedRowsData();
             if (selectedRowsData.length == 0) {
-                alert("Satır Seçiniz!");
+                alert("Lütfen bir veya daha fazla satır seçin.");
                 return;
             }
             else {
@@ -559,11 +561,6 @@
                                         e.event.target.value = value;
                                     }
                                 },
-                                validationRules: [{
-                                    type: "pattern",
-                                    pattern: /^\90\d{10}$/,
-                                    message: "Telefon numarası 90XXXXXXXXXX formatında olmalıdır."
-                                }],
                                 allowEditing: true
                             },
                             {
@@ -741,17 +738,13 @@
                         caption: "Telefon No",
                         editorOptions: {
                             onInput: function (e) {
-                                var value = e.event.target.value;
-
-                                value = value.replace(/\D/g, '');
-
-                                if (!value.startsWith('90')) {
-                                    value = '90' + value.slice(value.startsWith('0') ? 1 : 0);
-                                }
-
-                                value = value.slice(0, 12);
-
-                                e.event.target.value = value;
+                                 var value = e.event.target.value;
+                                 value = value.replace(/\D/g, '');
+                                 if (!value.startsWith('90')) {
+                                     value = '90' + value.slice(2);
+                                 }
+                                 value = value.slice(0, 12);
+                                 e.event.target.value = value;
                             }
                         },
                         validationRules: [
@@ -759,11 +752,6 @@
                                 type: "required",
                                 message: "Telefon numarası zorunludur."
                             },
-                            {
-                                type: "pattern",
-                                pattern: /^90\d{10}$/,
-                                message: "Telefon numarası 90XXXXXXXXXX formatında olmalıdır."
-                            }
                         ],
                         allowEditing: true
                     },

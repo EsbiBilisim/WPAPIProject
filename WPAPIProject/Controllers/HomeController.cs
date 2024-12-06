@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using WPAPIProject.Logic;
 using WPAPIProject.Logic.Interfaces;
@@ -72,7 +73,7 @@ namespace WPAPIProject.Controllers
 
         [HttpPost]
         [AllowAnonymous]
-        public IActionResult UserLogin(string FIRMAUNVANI, string YETKILIADISOYADI, string KULLANICISIFRESI, string TELEFONNO, string WAPIKEY, int GUVENLIKKODU, string KULLANICIADI, string KULLANICISIFRESI_USER, int GUVENLIKKODU_USER)
+        public async Task<IActionResult> UserLogin(string FIRMAUNVANI, string YETKILIADISOYADI, string KULLANICISIFRESI, string APITELEFONNO, string YETKILITELEFONNO, string WAPIKEY, int GUVENLIKKODU, string KULLANICIADI, string KULLANICISIFRESI_USER, int GUVENLIKKODU_USER)
         {
             W_USERS user = new W_USERS();
 
@@ -83,7 +84,8 @@ namespace WPAPIProject.Controllers
                 firm.FIRMAUNVANI = FIRMAUNVANI;
                 firm.YETKILIADISOYADI = YETKILIADISOYADI;
                 firm.KULLANICISIFRESI = KULLANICISIFRESI;
-                firm.TELEFONNO = TELEFONNO;
+                firm.APITELEFONNO = APITELEFONNO;
+                firm.YETKILITELEFONNO = YETKILITELEFONNO;
                 firm.WAPIKEY = WAPIKEY;
                 firm.GUVENLIKKODU = GUVENLIKKODU;
 
@@ -94,7 +96,7 @@ namespace WPAPIProject.Controllers
 
                 user.KAYITTARIHI = DateTime.Now;
                 user.FIRMID = firm.ID;
-                user.KULLANICIADI = YETKILIADISOYADI;
+                user.KULLANICIADI_USER = YETKILIADISOYADI;
                 user.KULLANICISIFRESI_USER = KULLANICISIFRESI;
                 user.GUVENLIKKODU_USER = GUVENLIKKODU;
 
@@ -106,7 +108,7 @@ namespace WPAPIProject.Controllers
             {
                 user = _db.W_USERS
                .FirstOrDefault(u =>
-                   u.KULLANICIADI == KULLANICIADI &&
+                   u.KULLANICIADI_USER == KULLANICIADI &&
                    u.KULLANICISIFRESI_USER == KULLANICISIFRESI_USER &&
                    u.GUVENLIKKODU_USER == GUVENLIKKODU_USER);
             }
@@ -115,25 +117,85 @@ namespace WPAPIProject.Controllers
             {
                 _sql.SessionSet("Kullanici", user);
 
-                var sonuc = new SONUC()
+                Random random = new Random();
+                int verificationCode = random.Next(100000, 999999);
+
+                var options = new RestClientOptions("https://www.wapifly.com/api/902642780280/send-message");
+                var client = new RestClient(options);
+                var request = new RestRequest("");
+                request.AddHeader("accept", "application/json");
+                request.AddHeader("Accept-Language", "tr");
+                request.AddHeader("wapikey", "39706fd7d8a2d870b7f67ab335f0a8cf395878664439f7aaa4f26cd7e647f80e");
+
+                var firmaYetkilisi = _db.W_FIRMS.Where(s => s.ID == user.FIRMID).FirstOrDefault();
+
+                var payload = new
+                {
+                    type = 1,
+                    interval = 1,
+                    autoblacklist = false,
+                    blacklistlink = false,
+                    numbers = firmaYetkilisi.YETKILITELEFONNO,
+                    message = verificationCode.ToString()
+                };
+
+                request.AddJsonBody(payload);
+
+                var response = await client.PostAsync<RestResponse>(request);
+
+                if (response != null && (response.IsSuccessful || response.StatusCode == 0))
+                {
+                    Console.WriteLine($"API Yanıtı: {response.Content}");
+
+                    user.DOGRULAMAKODU = verificationCode;
+                    user.DOGRULAMAKODUZAMANASIMI = DateTime.Now.AddMinutes(5);
+                    _db.SaveChanges();
+                }
+                else
+                {
+                    Console.WriteLine($"API Hata: {response?.ErrorMessage}");
+                }
+
+                return Json(new { Success = true, Message = "Kullanıcı girişi başarılı!" });
+            }
+            else
+            {
+                return Json(new { Success = false, Message = "Geçersiz kullanıcı adı veya şifre." });
+            }
+        }
+
+        [HttpPost]
+        public IActionResult VerifyCode(int verificationCode)
+        {
+            var user = _sql.KullaniciGetir("Kullanici");
+            if (user == null)
+            {
+                return Json(new { Success = false, Message = "Kullanıcı oturumu bulunamadı." });
+            }
+
+            var dbUser = _db.W_USERS.FirstOrDefault(u => u.ID == user.ID);
+
+            if (dbUser != null &&
+                dbUser.DOGRULAMAKODU == verificationCode &&
+                dbUser.DOGRULAMAKODUZAMANASIMI > DateTime.Now)
+            {
+                dbUser.DOGRULAMAKODU = null;
+                dbUser.DOGRULAMAKODUZAMANASIMI = null;
+                _db.SaveChanges();
+
+                var result = new SONUC
                 {
                     DURUM = true,
                     URL = "/Home/Index"
                 };
 
-                return Json(new { Success = true, Message = "Kullanıcı girişi başarılı!", Data = sonuc });
+                return Json(new { Success = true, Message = "Doğrulama başarılı!", Data = result });
             }
-            else
-            {
-                var sonuc = new SONUC()
-                {
-                    DURUM = false,
-                    URL = "Kullanıcı Adı veya Şifre Hatalı!"
-                };
 
-                return Json(new { Success = false, Message = "Geçersiz kullanıcı adı veya şifre.", Data = sonuc });
-            }
+            HttpContext.Session.Clear();
+            return Json(new { Success = false, Message = "Doğrulama kodu hatalı veya süresi dolmuş." });
         }
+
 
         [HttpGet]
         public object FirmaMusterileriGetir(DataSourceLoadOptions loadOptions)
@@ -464,7 +526,7 @@ namespace WPAPIProject.Controllers
 
                 if (Request.Form.Files.Count == 0)
                 {
-                    var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.TELEFONNO}/send-message");
+                    var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
                     var client = new RestClient(options);
                     var request = new RestRequest("");
                     request.AddHeader("accept", "application/json");
@@ -517,7 +579,7 @@ namespace WPAPIProject.Controllers
                     {
                         for (int i = 0; i < dosyaYollari.Count; i++)
                         {
-                            var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.TELEFONNO}/send-message");
+                            var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
                             var client = new RestClient(options);
                             var request = new RestRequest("");
                             request.AddHeader("accept", "application/json");
@@ -546,7 +608,7 @@ namespace WPAPIProject.Controllers
 
                         for (int i = 0; i < dosyaYollari.Count; i++)
                         {
-                            var optionsx = new RestClientOptions($"https://www.wapifly.com/api/{firma.TELEFONNO}/send-message");
+                            var optionsx = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
                             var clientx = new RestClient(optionsx);
                             var requestx = new RestRequest("");
                             requestx.AddHeader("accept", "application/json");
@@ -569,7 +631,7 @@ namespace WPAPIProject.Controllers
                             var responsex = await clientx.PostAsync<RestResponse>(requestx);
                         }
 
-                        var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.TELEFONNO}/send-message");
+                        var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
                         var client = new RestClient(options);
                         var request = new RestRequest("");
                         request.AddHeader("accept", "application/json");
