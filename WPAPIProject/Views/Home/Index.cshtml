@@ -177,28 +177,33 @@
 
                     var dataGrid = $("#firmaYetkiliTelefon").dxDataGrid("instance");
                     if (dataGrid) {
-                        var columns = dataGrid.getVisibleColumns();  
+                        var columns = dataGrid.getVisibleColumns();
 
                         columns.forEach(column => {
+                            if (column.dataField === "EKLENMETARIHI") {
+                                return; 
+                            }
+
                             const li = document.createElement('li');
-                            li.textContent = column.caption;  
+                            li.textContent = column.caption;
 
                             li.addEventListener('click', () => {
-                                const beforeMatch = value.slice(0, cursorPosition - 2);  
-                                const afterMatch = value.slice(cursorPosition);  
+                                const beforeMatch = value.slice(0, cursorPosition - 2);
+                                const afterMatch = value.slice(cursorPosition);
 
                                 const cleanedCaption = column.caption
-                                    .replace(/\s+/g, '') 
+                                    .replace(/\s+/g, '')
                                     .trim();
 
-                                e.target.value = `${beforeMatch}@@${cleanedCaption} ${afterMatch}`;
+                                e.target.value = `${beforeMatch} @@${cleanedCaption} ${afterMatch}`;
 
-                                mentionDropdown.style.display = 'none';  
+                                mentionDropdown.style.display = 'none';
                             });
 
-                            mentionDropdown.appendChild(li);   
+                            mentionDropdown.appendChild(li);
                         });
                     }
+
 
                     const caretPosition = getCaretCoordinates(e.target, cursorPosition);
 
@@ -236,6 +241,8 @@
             }
 
         $('#uploadButton').click(function(e) {
+            showPleaseWait();
+
             e.preventDefault();
 
             var fileInput = $('#file')[0];
@@ -254,6 +261,7 @@
                         if (response.sonuc) {
                             alert(response.mesaj);
                             getir();
+                            hidePleaseWait();
                         }
                     },
                     error: function(xhr, status, error) {
