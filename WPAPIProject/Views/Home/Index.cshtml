@@ -99,6 +99,7 @@
         <div class="modal-content">
             <div class="modal-header bg-success">
                 Düzenle
+                <input type="hidden" id="hiddenClick" name="name" value="" />
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
             </div>
             <div class="modal-body">
@@ -106,6 +107,23 @@
             </div>
             <div class="modal-footer" style="margin-top:25px;">
                 <button type="button" class="btn btn-success" onclick="duzenleKaydet()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modal_addModal" class="modal" tabindex="-1" data-backdrop="static" data-keyboard="false" role="dialog">
+    <div class="modal-dialog" style="min-width:65%;">
+        <div class="modal-content">
+            <div class="modal-header bg-success">
+                Ekle
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="addGrid"></div>
+            </div>
+            <div class="modal-footer" style="margin-top:25px;">
+                <button type="button" class="btn btn-success" onclick="ekleKaydet()">Kaydet</button>
             </div>
         </div>
     </div>
@@ -293,7 +311,7 @@
                                 {
                                     text: "Ekle",
                                     onItemClick: function () {
-                                         ekle(e.component);
+                                         ekleGrid(e.component);
                                     }
                                 },
                                 {
@@ -470,39 +488,48 @@
         }
 
         function duzenleKaydet() {
-            showPleaseWait();
             var dataGrid = $("#editGrid").dxDataGrid("instance");
-            var datas = dataGrid.getDataSource().items();
 
-            var isValid = true;
-            if (!isValid) {
-                hidePleaseWait();
-                return;
-            }
-
-            $.ajax({
-                url: '/Home/UpdateRecord',
-                method: 'POST',
-                data: JSON.stringify(datas),
-                contentType: 'application/json; charset=utf-8',
-                dataType: 'json',
-                success: function (response) {
-                    if (response.success) {
-                        alert(response.message);
-                        $("#modal_editModal").modal('hide');
-
-                        dataGrid.option('dataSource', []);
-                        getir();
-                    } else {
-                        alert("Güncelleme başarısız: " + response.message);
-                    }
-                },
-                error: function () {
-                    alert("Bir hata oluştu.");
-                },
-                complete: function() {
-                    hidePleaseWait();
+            dataGrid.saveEditData().done(function () {
+                if (!confirm("Bu işlemi gerçekleştirmek istediğinizden emin misiniz?")) {
+                    return;
                 }
+
+                showPleaseWait();
+                var datas = dataGrid.getDataSource().items();
+
+                var isValid = true;
+                if (!isValid) {
+                    hidePleaseWait();
+                    return;
+                }
+
+                $.ajax({
+                    url: '/Home/UpdateRecord',
+                    method: 'POST',
+                    data: JSON.stringify(datas),
+                    contentType: 'application/json; charset=utf-8',
+                    dataType: 'json',
+                    success: function (response) {
+                        if (response.success) {
+                            alert(response.message);
+                            $("#modal_editModal").modal('hide');
+
+                            dataGrid.option('dataSource', []);
+                            getir();
+                        } else {
+                            alert("Güncelleme başarısız: " + response.message);
+                        }
+                    },
+                    error: function () {
+                        alert("Bir hata oluştu.");
+                    },
+                    complete: function() {
+                        hidePleaseWait();
+                    }
+                });
+            }).fail(function () {
+                alert("Hücredeki düzenlemeler tamamlanamadı. Lütfen tekrar deneyin.");
             });
         }
 
@@ -542,49 +569,121 @@
             }
         }
 
-        function ekle() {
-            var yeniKullaniciAdiSoyadi = prompt("Kullanıcı Ad Soyad:");
-            var yeniIsGrubu = prompt("İş Grubu:");
+        function ekleKaydet() {
+            var dataGrid = $("#addGrid").dxDataGrid("instance");
 
-            var yeniTelefon = prompt("Telefon Numarası (90XXXXXXXXXX formatında):");
+            dataGrid.saveEditData().done(function () {
+                var datas = dataGrid.getDataSource().items();
 
-            var telefonPattern = /^90\d{10}$/;
-
-            if (!telefonPattern.test(yeniTelefon)) {
-                alert("Telefon numarası geçersiz. Lütfen 90XXXXXXXXXX formatında girin.");
-                return;
-            } else {
-                alert("Telefon numarası geçerli.");
-            }
-
-            if (!yeniKullaniciAdiSoyadi || !yeniTelefon || !yeniIsGrubu) {
-                alert("Tüm alanları doldurmanız gerekmektedir.");
-                return;
-            }
-
-            var yeniKayit = {
-                ADSOYAD: yeniKullaniciAdiSoyadi,
-                TELEFONNO: yeniTelefon,
-                ISGRUBU: yeniIsGrubu
-            };
-
-            $.ajax({
-                url: '/Home/AddRecord',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(yeniKayit),
-                success: function(response) {
-                    if (response.success) {
-                        alert(response.message);
-                        getir();
-                    } else {
-                        alert("Ekleme başarısız: " + response.message);
-                    }
-                },
-                error: function(error) {
-                    alert("Bir hata oluştu.");
-                    console.error("Hata Detayı: ", error);
+                if (datas.length === 0) {
+                    alert("Eklemek için gridde en az bir kayıt bulunmalıdır.");
+                    return;
                 }
+
+                var telefonPattern = /^90\d{10}$/;
+
+                for (var i = 0; i < datas.length; i++) {
+                    var row = datas[i];
+
+                    if (!row.ADSOYAD || !row.TELEFONNO || !row.ISGRUBU) {
+                        alert("Tüm alanlar doldurulmalıdır. Eksik kayıt var.");
+                        return;
+                    }
+
+                    if (!telefonPattern.test(row.TELEFONNO)) {
+                        alert(`Telefon numarası geçersiz: ${row.TELEFONNO}. Lütfen 90XXXXXXXXXX formatında girin.`);
+                        return;
+                    }
+                }
+
+                $.ajax({
+                    url: '/Home/AddRecord',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(datas),
+                    success: function (response) {
+                        if (response.success) {
+                            alert(response.message);
+                            $("#modal_addModal").modal("hide");
+                            getir();
+                        } else {
+                            alert("Ekleme başarısız: " + response.message);
+                        }
+                    },
+                    error: function (error) {
+                        alert("Bir hata oluştu.");
+                        console.error("Hata Detayı: ", error);
+                    }
+                });
+            });
+        }
+
+        function ekleGrid() {
+            $("#modal_addModal").modal('show');
+
+            var bosData = [
+                { ADSOYAD: "", TELEFONNO: "", ISGRUBU: "" }
+            ];
+
+            $("#addGrid").dxDataGrid({
+                dataSource: bosData,
+                editing: {
+                    mode: "batch",
+                    allowAdding: true,
+                    allowUpdating: true,
+                    allowDeleting: true
+                },
+                columns: [
+                    {
+                        dataField: "ADSOYAD",
+                        caption: "Ad Soyad",
+                        allowEditing: true,
+                        validationRules: [{ type: "required", message: "Ad Soyad zorunludur." }]
+                    },
+                    {
+                        dataField: "TELEFONNO",
+                        caption: "Telefon No",
+                        editorOptions: {
+                            onInput: function (e) {
+                                var value = e.event.target.value;
+
+                                value = value.replace(/\D/g, '');
+
+                                if (!value.startsWith('90')) {
+                                    value = '90' + value.slice(value.startsWith('0') ? 1 : 0);
+                                }
+
+                                value = value.slice(0, 12);
+
+                                e.event.target.value = value;
+                            }
+                        },
+                        validationRules: [
+                            {
+                                type: "required",
+                                message: "Telefon numarası zorunludur."
+                            },
+                            {
+                                type: "pattern",
+                                pattern: /^90\d{10}$/,
+                                message: "Telefon numarası 90XXXXXXXXXX formatında olmalıdır."
+                            }
+                        ],
+                        allowEditing: true
+                    },
+                    {
+                        dataField: "ISGRUBU",
+                        caption: "İş Grubu",
+                        validationRules: [{ type: "required", message: "İş Grubu zorunludur." }],
+                        allowEditing: true
+                    }
+                ],
+                showBorders: true,
+                paging: { enabled: false }
+            });
+
+            $("#modal_addModal").on('shown.bs.modal', function () {
+                $("#addGrid").dxDataGrid("instance").refresh();
             });
         }
 

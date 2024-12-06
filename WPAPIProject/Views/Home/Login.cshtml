@@ -104,7 +104,20 @@
 
     $(document).ready(function() {
         telefon();
+        Temizle();
     });
+
+    function Temizle() {
+        $("#FIRMAUNVANI").val('');
+        $("#YETKILIADISOYADI").val('');
+        $("#KULLANICISIFRESI").val('');
+        $("#TELEFONNO").val('');
+        $("#WAPIKEY").val('');
+        $("#GUVENLIKKODU").val('');
+        $("#KULLANICIADI").val('');
+        $("#KULLANICISIFRESI_USER").val('');
+        $("#GUVENLIKKODU_USER").val('');
+    }
 
     let flag = "0";
 

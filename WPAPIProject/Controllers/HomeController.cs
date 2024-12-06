@@ -54,9 +54,9 @@ namespace WPAPIProject.Controllers
         {
             try
             {
-                string customersTable = $"CREATE TABLE W_CUSTOMERS_{firmaId} (ID INT IDENTITY(1,1) NOT NULL, EKLENMETARIHI DATETIME, ADSOYAD NVARCHAR(75), TELEFONNO NVARCHAR(50), ISGRUBU NVARCHAR(50), AKTIF bit CONSTRAINT [PK_W_CUSTOMERS_{firmaId}] PRIMARY KEY CLUSTERED ([ID] ASC)) ON [PRIMARY]";
+                string customersTable = $"CREATE TABLE W_CUSTOMERS_{firmaId} (ID INT IDENTITY(1,1) NOT NULL, EKLENMETARIHI DATETIME, ADSOYAD NVARCHAR(50), TELEFONNO NVARCHAR(12), ISGRUBU NVARCHAR(50), AKTIF BIT CONSTRAINT [PK_W_CUSTOMERS_{firmaId}] PRIMARY KEY CLUSTERED ([ID] ASC)) ON [PRIMARY]";
 
-                string messagesTable = $"CREATE TABLE W_MESSAGES_{firmaId} (ID INT IDENTITY(1,1) NOT NULL, MESAJTARIHI DATETIME, CUSTOMERID INT, ATILANMESAJ NVARCHAR(MAX), CONSTRAINT [PK_W_MESSAGES_{firmaId}] PRIMARY KEY CLUSTERED ([ID] ASC)) ON [PRIMARY]";
+                string messagesTable = $"CREATE TABLE W_MESSAGES_{firmaId} (ID INT IDENTITY(1,1) NOT NULL, MESAJTARIHI DATETIME, CUSTOMERID INT, ATILANMESAJ NVARCHAR(MAX), ATILANMESAJURL NVARCHAR(MAX) CONSTRAINT [PK_W_MESSAGES_{firmaId}] PRIMARY KEY CLUSTERED ([ID] ASC)) ON [PRIMARY]";
 
                 _db.Database.ExecuteSqlRaw(customersTable);
                 _db.Database.ExecuteSqlRaw(messagesTable);
@@ -488,6 +488,23 @@ namespace WPAPIProject.Controllers
                     if (response != null && (response.IsSuccessful || response.StatusCode == 0))
                     {
                         Console.WriteLine($"API Yanıtı: {response.Content}");
+
+                        var logList = new List<W_MESSAGES>();
+
+                        foreach (var item in selectedData)
+                        {
+                            var log = new W_MESSAGES
+                            {
+                                MESAJTARIHI = DateTime.Now,
+                                CUSTOMERID = item.ID,
+                                ATILANMESAJ = duzenlenmisAciklama,
+                                ATILANMESAJURL = ""
+                            };
+                            logList.Add(log);
+                        }
+
+                        _db.W_MESSAGES.AddRange(logList);
+                        await _db.SaveChangesAsync();
                     }
                     else
                     {
@@ -525,6 +542,8 @@ namespace WPAPIProject.Controllers
                     }
                     else
                     {
+                        string dosyaUrlBirlesik = string.Join(",", dosyaYollari);
+
                         for (int i = 0; i < dosyaYollari.Count; i++)
                         {
                             var optionsx = new RestClientOptions($"https://www.wapifly.com/api/{firma.TELEFONNO}/send-message");
@@ -570,6 +589,23 @@ namespace WPAPIProject.Controllers
                         request.AddJsonBody(payload);
 
                         var response = await client.PostAsync<RestResponse>(request);
+
+                        var logList = new List<W_MESSAGES>();
+
+                        foreach (var item in selectedData)
+                        {
+                            var log = new W_MESSAGES
+                            {
+                                MESAJTARIHI = DateTime.Now,
+                                CUSTOMERID = item.ID,
+                                ATILANMESAJ = duzenlenmisAciklama,
+                                ATILANMESAJURL = dosyaUrlBirlesik
+                            };
+                            logList.Add(log);
+                        }
+
+                        _db.W_MESSAGES.AddRange(logList);
+                        await _db.SaveChangesAsync();
                     }
                 }
                 return Json(new { Sonuc = true, Msg = "İşlem Başarılı!" });
@@ -667,13 +703,13 @@ namespace WPAPIProject.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddRecord([FromBody] W_CUSTOMERS yeniKayit)
+        public IActionResult AddRecord([FromBody] List<W_CUSTOMERS> yeniKayitlar)
         {
             try
             {
-                if (yeniKayit == null)
+                if (yeniKayitlar == null || yeniKayitlar.Count == 0)
                 {
-                    return Json(new { success = false, message = "Eklemek için geçerli bir kayıt verilmedi." });
+                    return Json(new { success = false, message = "Eklemek için geçerli kayıt verilmedi." });
                 }
 
                 var kullanici = _sql.KullaniciGetir("Kullanici");
@@ -683,23 +719,26 @@ namespace WPAPIProject.Controllers
                 {
                     connection.Open();
 
-                    string query = $@"
-        INSERT INTO {tableName} (ADSOYAD, TELEFONNO, ISGRUBU, EKLENMETARIHI, AKTIF)
-        VALUES (@ADSOYAD, @TELEFONNO, @ISGRUBU, @EKLENMETARIHI, @AKTIF)";
-
-                    using (var command = new SqlCommand(query, connection))
+                    foreach (var yeniKayit in yeniKayitlar)
                     {
-                        command.Parameters.AddWithValue("@ADSOYAD", yeniKayit.ADSOYAD);
-                        command.Parameters.AddWithValue("@TELEFONNO", yeniKayit.TELEFONNO);
-                        command.Parameters.AddWithValue("@ISGRUBU", yeniKayit.ISGRUBU);
-                        command.Parameters.AddWithValue("@EKLENMETARIHI", DateTime.Now);
-                        command.Parameters.AddWithValue("@AKTIF", true);
+                        string query = $@"
+                                INSERT INTO {tableName} (ADSOYAD, TELEFONNO, ISGRUBU, EKLENMETARIHI, AKTIF)
+                                VALUES (@ADSOYAD, @TELEFONNO, @ISGRUBU, @EKLENMETARIHI, @AKTIF)";
 
-                        command.ExecuteNonQuery();
+                        using (var command = new SqlCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@ADSOYAD", yeniKayit.ADSOYAD);
+                            command.Parameters.AddWithValue("@TELEFONNO", yeniKayit.TELEFONNO);
+                            command.Parameters.AddWithValue("@ISGRUBU", yeniKayit.ISGRUBU);
+                            command.Parameters.AddWithValue("@EKLENMETARIHI", DateTime.Now);
+                            command.Parameters.AddWithValue("@AKTIF", true);
+
+                            command.ExecuteNonQuery();
+                        }
                     }
                 }
 
-                return Json(new { success = true, message = "Kayıt başarıyla eklendi." });
+                return Json(new { success = true, message = "Kayıtlar başarıyla eklendi." });
             }
             catch (Exception ex)
             {
