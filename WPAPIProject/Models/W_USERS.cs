@@ -12,6 +12,6 @@ namespace WPAPIProject.Models
         public int GUVENLIKKODU_USER { get; set; }
         public int? DOGRULAMAKODU { get; set; }
         public DateTime? DOGRULAMAKODUZAMANASIMI { get; set; }
-        public DateTime? TELEFONNO_USER { get; set; }
+        public string TELEFONNO_USER { get; set; }
     }
 }

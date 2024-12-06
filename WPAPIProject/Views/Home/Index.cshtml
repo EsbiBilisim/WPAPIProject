@@ -6,7 +6,7 @@
     var kullanici = sql.KullaniciGetir("Kullanici");
     var kullaniciId = kullanici.ID;
 }
-<script src="~/js/etiket.js"></script>
+
 <style>
     .dx-datagrid-group-panel, .dx-group-panel-message {
         color: rebeccapurple !important;
@@ -51,10 +51,10 @@
         display: none;
         background-color: white;
         border: 1px solid #ccc;
-        width: 200px; /* Dropdown genişliği */
-        max-height: 150px; /* Dropdown maksimum yüksekliği */
-        overflow-y: auto; /* Yükseklik aşıldığında kaydırma çubuğu */
-        z-index: 1000; /* Dropdown'un diğer öğelerin üstünde görünmesini sağlar */
+        width: 200px;
+        max-height: 150px; 
+        overflow-y: auto; 
+        z-index: 1000;
     }
 
     #mention-dropdown li {
@@ -357,7 +357,7 @@
                             mode: 'multiple'
                         },
                         onEditorPreparing: function (e) {
-                            if (e.parentType === "filterRow" && (e.dataField === "KULLANICIADI" || e.dataField === "KULLANICISOYADI" || e.dataField === "ISGRUBU")) {
+                            if (e.parentType === "filterRow" && (e.dataField === "ADSOYAD" || e.dataField === "ISGRUBU")) {
                                 e.editorOptions.onValueChanged = function (args) {
                                     var value = args.value;
                                     var upperCaseValue = value.replace(/i/g, 'İ').replace(/ı/g, 'I').toUpperCase();
