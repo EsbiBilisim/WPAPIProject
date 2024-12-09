@@ -33,18 +33,18 @@
         text-align: right;
     }
 
-    .file-upload-container .form-label {
-        display: block;
-        margin-bottom: 5px;
-    }
+        .file-upload-container .form-label {
+            display: block;
+            margin-bottom: 5px;
+        }
 
-    .file-upload-container .form-control {
-        flex: 1;
-    }
+        .file-upload-container .form-control {
+            flex: 1;
+        }
 
-    .file-upload-container .d-flex {
-        gap: 10px;
-    }
+        .file-upload-container .d-flex {
+            gap: 10px;
+        }
 
     #mention-dropdown {
         position: absolute;
@@ -52,17 +52,18 @@
         background-color: white;
         border: 1px solid #ccc;
         width: 200px;
-        max-height: 150px; 
-        overflow-y: auto; 
+        max-height: 150px;
+        overflow-y: auto;
         z-index: 1000;
     }
 
-    #mention-dropdown li {
-        padding: 5px 10px;
-    }
-    #mention-dropdown li:hover {
-        background-color: #f0f0f0;
-    }
+        #mention-dropdown li {
+            padding: 5px 10px;
+        }
+
+            #mention-dropdown li:hover {
+                background-color: #f0f0f0;
+            }
 
 </style>
 
@@ -86,10 +87,10 @@
         <div style="position: relative;">
 
             <textarea id="aciklama" style="border: 1px solid #ccc; padding: 5px; min-height: 100px; width: 100%;" placeholder="Lütfen bir dosya yükleyin veya mesaj girin."></textarea>
-    <ul id="mention-dropdown" style="position: absolute; display: none; border: 1px solid #ccc; background: white; list-style: none; padding: 5px;"></ul>
+            <ul id="mention-dropdown" style="position: absolute; display: none; border: 1px solid #ccc; background: white; list-style: none; padding: 5px;"></ul>
 
 
-</div>
+        </div>
     </div>
     <div class="card-footer" style="display:flex; justify-content:flex-end;">
         <input type="file" id="istekDosya" class="form-control-file" style="background-color: skyblue; padding:2px;" multiple accept=".pdf,image/*">
@@ -166,14 +167,14 @@
              getir();
 
             document.getElementById('aciklama').addEventListener('input', function (e) {
-                const mentionDropdown = document.getElementById('mention-dropdown'); 
-                const value = e.target.value;  
+                const mentionDropdown = document.getElementById('mention-dropdown');
+                const value = e.target.value;
 
                 var cursorPosition = $('#aciklama').prop("selectionStart");
 
                 if (value.endsWith('@@')) {
-                    mentionDropdown.style.display = 'block';  
-                    mentionDropdown.innerHTML = ''; 
+                    mentionDropdown.style.display = 'block';
+                    mentionDropdown.innerHTML = '';
 
                     var dataGrid = $("#firmaYetkiliTelefon").dxDataGrid("instance");
                     if (dataGrid) {
@@ -181,7 +182,7 @@
 
                         columns.forEach(column => {
                             if (column.dataField === "EKLENMETARIHI") {
-                                return; 
+                                return;
                             }
 
                             const li = document.createElement('li');
@@ -207,11 +208,11 @@
 
                     const caretPosition = getCaretCoordinates(e.target, cursorPosition);
 
-                    mentionDropdown.style.left = `${caretPosition.left}px`; 
+                    mentionDropdown.style.left = `${caretPosition.left}px`;
 
                     mentionDropdown.style.top = `3vh`;
                 } else {
-                    mentionDropdown.style.display = 'none'; 
+                    mentionDropdown.style.display = 'none';
                 }
             });
 
@@ -225,19 +226,19 @@
 
                 div.style.position = 'absolute';
                 div.style.visibility = 'hidden';
-                div.style.whiteSpace = 'pre-wrap';  
-                div.style.wordWrap = 'break-word';  
-                div.textContent = input.value.substring(0, position);  
+                div.style.whiteSpace = 'pre-wrap';
+                div.style.wordWrap = 'break-word';
+                div.textContent = input.value.substring(0, position);
 
                 const span = document.createElement('span');
-                span.textContent = input.value.substring(position) || '.';  
+                span.textContent = input.value.substring(position) || '.';
                 div.appendChild(span);
 
-                document.body.appendChild(div); 
-                const rect = span.getBoundingClientRect(); 
-                document.body.removeChild(div);  
+                document.body.appendChild(div);
+                const rect = span.getBoundingClientRect();
+                document.body.removeChild(div);
 
-                return { left: rect.left, top: rect.top };  
+                return { left: rect.left, top: rect.top };
             }
 
         $('#uploadButton').click(function(e) {
@@ -274,7 +275,9 @@
                     }
                 });
             } else {
-                     $('#responseMessage').html('<div class="alert alert-warning">Lütfen bir dosya seçin.</div>');
+                hidePleaseWait();
+                alert("Lütfen bir dosya seçin.");
+                // $('#responseMessage').html('<div class="alert alert-warning">Lütfen bir dosya seçin.</div>');
                 }
             });
         });
@@ -338,7 +341,7 @@
                         showRowLines: true,
                         paging: {
                             enabled: true,
-                            size: 250
+                            size: 100
                         },
                         pager: {
                             showPageSizeSelector: true,
@@ -355,15 +358,6 @@
                         },
                         selection: {
                             mode: 'multiple'
-                        },
-                        onEditorPreparing: function (e) {
-                            if (e.parentType === "filterRow" && (e.dataField === "ADSOYAD" || e.dataField === "ISGRUBU")) {
-                                e.editorOptions.onValueChanged = function (args) {
-                                    var value = args.value;
-                                    var upperCaseValue = value.replace(/i/g, 'İ').replace(/ı/g, 'I').toUpperCase();
-                                    e.setValue(upperCaseValue);
-                                }
-                            }
                         },
                         columnAutoWidth: true,
                         width: '100%',

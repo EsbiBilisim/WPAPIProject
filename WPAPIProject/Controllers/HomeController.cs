@@ -243,7 +243,8 @@ namespace WPAPIProject.Controllers
             LEFT OUTER JOIN 
                 W_CUSTOMERS_{kullanici.FIRMID} C 
             ON 
-                M.CUSTOMERID = C.ID";
+                M.CUSTOMERID = C.ID
+            ORDER BY ID DESC";
 
                 var data = _db.W_MESSAGES.FromSqlRaw(sql).ToList();
 
@@ -270,7 +271,7 @@ namespace WPAPIProject.Controllers
 
             if (kullanici != null)
             {
-                var sql = $"SELECT * FROM W_MESSAGES_{kullanici.FIRMID} ORDER BY ID DESC";
+                var sql = $"SELECT * FROM W_MESSAGES_{kullanici.FIRMID}";
                 var data = _db.W_MESSAGES.FromSqlRaw(sql).ToList();
 
                 return Json(new { success = true, messages = data });
@@ -683,38 +684,21 @@ namespace WPAPIProject.Controllers
                             {
                                 Console.WriteLine($"API Yanıtı: {response.Content}");
 
-                                var logList = new List<W_MESSAGES>();
-
-                                foreach (var item in selectedData)
-                                {
-                                    var log = new W_MESSAGES
-                                    {
-                                        MESAJTARIHI = DateTime.Now,
-                                        CUSTOMERID = item.ID,
-                                        ATILANMESAJ = message,
-                                        ATILANMESAJURL = ""
-                                    };
-                                    logList.Add(log);
-                                }
-
                                 using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
                                 {
                                     connection.Open();
 
-                                    foreach (var yeniKayit in logList)
-                                    {
-                                        string query = $@"
+                                    string query = $@"
                             INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
                             VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
 
-                                        using (var command = new SqlCommand(query, connection))
-                                        {
-                                            command.Parameters.AddWithValue("@MESAJTARIHI", yeniKayit.MESAJTARIHI);
-                                            command.Parameters.AddWithValue("@CUSTOMERID", yeniKayit.CUSTOMERID);
-                                            command.Parameters.AddWithValue("@ATILANMESAJ", yeniKayit.ATILANMESAJ);
-                                            command.Parameters.AddWithValue("@ATILANMESAJURL", yeniKayit.ATILANMESAJURL);
-                                            command.ExecuteNonQuery();
-                                        }
+                                    using (var command = new SqlCommand(query, connection))
+                                    {
+                                        command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
+                                        command.Parameters.AddWithValue("@CUSTOMERID", customer.ID);
+                                        command.Parameters.AddWithValue("@ATILANMESAJ", message);
+                                        command.Parameters.AddWithValue("@ATILANMESAJURL", "");
+                                        command.ExecuteNonQuery();
                                     }
                                 }
                             }
@@ -757,38 +741,21 @@ namespace WPAPIProject.Controllers
                                     {
                                         Console.WriteLine($"API Yanıtı: {response.Content}");
 
-                                        var logList = new List<W_MESSAGES>();
-
-                                        foreach (var item in selectedData)
-                                        {
-                                            var log = new W_MESSAGES
-                                            {
-                                                MESAJTARIHI = DateTime.Now,
-                                                CUSTOMERID = item.ID,
-                                                ATILANMESAJ = message,
-                                                ATILANMESAJURL = dosyaUrlBirlesik
-                                            };
-                                            logList.Add(log);
-                                        }
-
                                         using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
                                         {
                                             connection.Open();
 
-                                            foreach (var yeniKayit in logList)
-                                            {
-                                                string query = $@"
+                                            string query = $@"
                             INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
                             VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
 
-                                                using (var command = new SqlCommand(query, connection))
-                                                {
-                                                    command.Parameters.AddWithValue("@MESAJTARIHI", yeniKayit.MESAJTARIHI);
-                                                    command.Parameters.AddWithValue("@CUSTOMERID", yeniKayit.CUSTOMERID);
-                                                    command.Parameters.AddWithValue("@ATILANMESAJ", yeniKayit.ATILANMESAJ);
-                                                    command.Parameters.AddWithValue("@ATILANMESAJURL", yeniKayit.ATILANMESAJURL);
-                                                    command.ExecuteNonQuery();
-                                                }
+                                            using (var command = new SqlCommand(query, connection))
+                                            {
+                                                command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
+                                                command.Parameters.AddWithValue("@CUSTOMERID", customer.ID);
+                                                command.Parameters.AddWithValue("@ATILANMESAJ", message);
+                                                command.Parameters.AddWithValue("@ATILANMESAJURL", dosyaUrlBirlesik);
+                                                command.ExecuteNonQuery();
                                             }
                                         }
                                     }
@@ -852,38 +819,21 @@ namespace WPAPIProject.Controllers
                                 {
                                     Console.WriteLine($"API Yanıtı: {response.Content}");
 
-                                    var logList = new List<W_MESSAGES>();
-
-                                    foreach (var item in selectedData)
-                                    {
-                                        var log = new W_MESSAGES
-                                        {
-                                            MESAJTARIHI = DateTime.Now,
-                                            CUSTOMERID = item.ID,
-                                            ATILANMESAJ = message,
-                                            ATILANMESAJURL = dosyaUrlBirlesik
-                                        };
-                                        logList.Add(log);
-                                    }
-
                                     using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
                                     {
                                         connection.Open();
 
-                                        foreach (var yeniKayit in logList)
-                                        {
-                                            string query = $@"
+                                        string query = $@"
                             INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
                             VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
 
-                                            using (var command = new SqlCommand(query, connection))
-                                            {
-                                                command.Parameters.AddWithValue("@MESAJTARIHI", yeniKayit.MESAJTARIHI);
-                                                command.Parameters.AddWithValue("@CUSTOMERID", yeniKayit.CUSTOMERID);
-                                                command.Parameters.AddWithValue("@ATILANMESAJ", yeniKayit.ATILANMESAJ);
-                                                command.Parameters.AddWithValue("@ATILANMESAJURL", yeniKayit.ATILANMESAJURL);
-                                                command.ExecuteNonQuery();
-                                            }
+                                        using (var command = new SqlCommand(query, connection))
+                                        {
+                                            command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
+                                            command.Parameters.AddWithValue("@CUSTOMERID", customer.ID);
+                                            command.Parameters.AddWithValue("@ATILANMESAJ", message);
+                                            command.Parameters.AddWithValue("@ATILANMESAJURL", dosyaUrlBirlesik);
+                                            command.ExecuteNonQuery();
                                         }
                                     }
                                 }
