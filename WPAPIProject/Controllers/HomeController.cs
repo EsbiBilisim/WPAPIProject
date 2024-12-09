@@ -304,65 +304,82 @@ namespace WPAPIProject.Controllers
 
             using (ExcelPackage package = new ExcelPackage(fileStream))
             {
-                ExcelWorksheet worksheet = package.Workbook.Worksheets[0];
-                if (worksheet == null)
-                {
-                    throw new Exception("Excel sayfası bulunamadı.");
-                }
-
                 var columnMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "AD SOYAD", "ADSOYAD" },
-            { "ADI SOYADI", "ADSOYAD" },
-            { "ADSOYAD", "ADSOYAD" },
-            { "İSİM", "ADSOYAD" },
-            { "TELEFONNO", "TELEFONNO" },
-            { "TELEFON NO", "TELEFONNO" },
-            { "TEL NO", "TELEFONNO" },
-            { "TEL", "TELEFONNO" },
-            { "İŞ GRUBU", "ISGRUBU" },
-            { "İS GRUBU", "ISGRUBU" },
-            { "İSGRUBU", "ISGRUBU" }
-        };
+                                            {
+                                                { "AD SOYAD", "ADSOYAD" },
+                                                { "ADI SOYADI", "ADSOYAD" },
+                                                { "ADSOYAD", "ADSOYAD" },
+                                                { "İSİM", "ADSOYAD" },
+                                                { "TELEFONNO", "TELEFONNO" },
+                                                { "TELEFON NO", "TELEFONNO" },
+                                                { "TEL NO", "TELEFONNO" },
+                                                { "TEL", "TELEFONNO" },
+                                                { "İŞ GRUBU", "ISGRUBU" },
+                                                { "İS GRUBU", "ISGRUBU" },
+                                                { "İSGRUBU", "ISGRUBU" },
+                                                { "ISGRUBU", "ISGRUBU" }
+                                            };
 
-                int headerRow = 1;
-                Dictionary<string, int> columnIndexes = new Dictionary<string, int>();
-
-                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+                foreach (var worksheet in package.Workbook.Worksheets)
                 {
-                    string headerValue = worksheet.Cells[headerRow, col].Text.Trim().ToUpper();
+                    if (worksheet == null || worksheet.Dimension == null)
+                        continue; 
 
-                    if (columnMappings.TryGetValue(headerValue, out string mappedHeader))
+                    Dictionary<string, int> columnIndexes = GetColumnIndexes(worksheet, columnMappings);
+
+                    var requiredHeaders = new[] { "ADSOYAD", "TELEFONNO", "ISGRUBU" };
+                    if (!requiredHeaders.All(columnIndexes.ContainsKey))
+                        continue;
+
+                    if (dataTable.Columns.Count == 0)
                     {
-                        columnIndexes[mappedHeader] = col;
-                        dataTable.Columns.Add(mappedHeader, typeof(string));
-                    }
-                }
-
-                var requiredHeaders = new[] { "ADSOYAD", "TELEFONNO", "ISGRUBU" };
-                var missingHeaders = requiredHeaders.Except(columnIndexes.Keys).ToList();
-                if (missingHeaders.Any())
-                {
-                    throw new Exception($"Eksik sütun başlıkları: {string.Join(", ", missingHeaders)}");
-                }
-
-                for (int row = headerRow + 1; row <= worksheet.Dimension.End.Row; row++)
-                {
-                    DataRow newRow = dataTable.NewRow();
-
-                    foreach (var header in columnIndexes)
-                    {
-                        string cellValue = worksheet.Cells[row, header.Value].Text.Trim();
-                        newRow[header.Key] = header.Key == "TELEFONNO"
-                            ? FormatPhoneNumber(cellValue)
-                            : cellValue;
+                        foreach (var column in columnIndexes.Keys)
+                        {
+                            dataTable.Columns.Add(column, typeof(string));
+                        }
                     }
 
-                    dataTable.Rows.Add(newRow);
+                    int headerRow = 1;
+                    for (int row = headerRow + 1; row <= worksheet.Dimension.End.Row; row++)
+                    {
+                        DataRow newRow = dataTable.NewRow();
+                        bool hasData = false;
+
+                        foreach (var column in columnIndexes)
+                        {
+                            string cellValue = worksheet.Cells[row, column.Value].Text.Trim();
+                            if (!string.IsNullOrEmpty(cellValue))
+                                hasData = true;
+
+                            newRow[column.Key] = column.Key == "TELEFONNO"
+                                ? FormatPhoneNumber(cellValue)
+                                : cellValue;
+                        }
+
+                        if (hasData)
+                            dataTable.Rows.Add(newRow);  
+                    }
                 }
             }
 
             return dataTable;
+        }
+
+        private Dictionary<string, int> GetColumnIndexes(ExcelWorksheet worksheet, Dictionary<string, string> columnMappings)
+        {
+            int headerRow = 1;
+            Dictionary<string, int> columnIndexes = new Dictionary<string, int>();
+
+            for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+            {
+                string headerValue = worksheet.Cells[headerRow, col].Text.Trim();
+                if (columnMappings.TryGetValue(headerValue, out string mappedHeader))
+                {
+                    columnIndexes[mappedHeader] = col;
+                }
+            }
+
+            return columnIndexes;
         }
 
         private void SaveToDatabase(DataTable dataTable, string connectionString, object kullanici)
