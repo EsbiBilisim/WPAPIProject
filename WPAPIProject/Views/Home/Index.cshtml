@@ -1,7 +1,7 @@
 ﻿@using WPAPIProject.Logic.Interfaces
 @inject ISqls sql;
 @{
-    ViewData["Title"] = "Home";
+    ViewData["Title"] = "Ana Sayfa";
 
     var kullanici = sql.KullaniciGetir("Kullanici");
     var kullaniciId = kullanici.ID;

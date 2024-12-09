@@ -38,6 +38,11 @@ namespace WPAPIProject.Controllers
             return View();
         }
 
+        public IActionResult Logs()
+        {
+            return View();
+        }
+
         [AllowAnonymous]
         public IActionResult Login()
         {
@@ -223,19 +228,104 @@ namespace WPAPIProject.Controllers
         }
 
         [HttpGet]
+        public object FirmaMesajLogKayitlari(DataSourceLoadOptions loadOptions)
+        {
+            var kullanici = _sql.KullaniciGetir("Kullanici");
+
+            if (kullanici != null)
+            {
+                var sql = $@"
+            SELECT 
+                M.*, 
+                C.ADSOYAD AS CUSTOMERNAME 
+            FROM 
+                W_MESSAGES_{kullanici.FIRMID} M
+            LEFT OUTER JOIN 
+                W_CUSTOMERS_{kullanici.FIRMID} C 
+            ON 
+                M.CUSTOMERID = C.ID";
+
+                var data = _db.W_MESSAGES.FromSqlRaw(sql).ToList();
+
+                var result = DataSourceLoader.Load(data, loadOptions);
+                return new
+                {
+                    sonuc = true,
+                    mesaj = "Başarılı",
+                    data = result
+                };
+            }
+
+            return new
+            {
+                sonuc = false,
+                mesaj = "Kullanıcı bulunamadı"
+            };
+        }
+
+        [HttpGet]
         public IActionResult MesajlariGetir()
         {
             var kullanici = _sql.KullaniciGetir("Kullanici");
 
             if (kullanici != null)
             {
-                var sql = $"SELECT * FROM W_MESSAGES_{kullanici.FIRMID}";
+                var sql = $"SELECT * FROM W_MESSAGES_{kullanici.FIRMID} ORDER BY ID DESC";
                 var data = _db.W_MESSAGES.FromSqlRaw(sql).ToList();
 
                 return Json(new { success = true, messages = data });
             }
 
             return Json(new { success = false, message = "Kullanıcı bulunamadı." });
+        }
+
+        [HttpPost]
+        public IActionResult MesajLogKayitlariDosyalar(int rowId)
+        {
+            var kullanici = _sql.KullaniciGetir("Kullanici");
+
+            if (kullanici != null)
+            {
+                var tableName = $"W_MESSAGES_{kullanici.FIRMID}";
+
+                using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
+                {
+                    connection.Open();
+
+                    var query = $"SELECT ATILANMESAJURL FROM {tableName} WHERE ID = @RowId";
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@RowId", rowId);
+
+                        var result = command.ExecuteScalar() as string;
+                        if (!string.IsNullOrEmpty(result))
+                        {
+                            var urls = result.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                            return Json(new
+                            {
+                                success = true,
+                                message = "Dosyalar başarıyla yüklendi.",
+                                urls
+                            });
+                        }
+                        else
+                        {
+                            return Json(new
+                            {
+                                success = false,
+                                message = "Kayıt bulunamadı veya dosya URL'si boş."
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Json(new
+            {
+                success = false,
+                message = "Kullanıcı bilgisi alınamadı."
+            });
         }
 
         private string FormatPhoneNumber(string phoneNumber)
@@ -323,7 +413,7 @@ namespace WPAPIProject.Controllers
                 foreach (var worksheet in package.Workbook.Worksheets)
                 {
                     if (worksheet == null || worksheet.Dimension == null)
-                        continue; 
+                        continue;
 
                     Dictionary<string, int> columnIndexes = GetColumnIndexes(worksheet, columnMappings);
 
@@ -357,7 +447,7 @@ namespace WPAPIProject.Controllers
                         }
 
                         if (hasData)
-                            dataTable.Rows.Add(newRow);  
+                            dataTable.Rows.Add(newRow);
                     }
                 }
             }
@@ -541,7 +631,9 @@ namespace WPAPIProject.Controllers
                                     duzenlenmisAciklama.Contains("@Telefon") ||
                                     duzenlenmisAciklama.Contains("@İşGrubu");
 
-                if (containsPlaceholders)
+                string baseUrl = "https://www.esbi.com.tr/logobuluterplite/logobuluterplite_basvuru.php";
+
+                if (containsPlaceholders || duzenlenmisAciklama.Contains(baseUrl))
                 {
                     foreach (var customer in selectedData)
                     {
@@ -549,6 +641,20 @@ namespace WPAPIProject.Controllers
                             .Replace("@AdSoyad", customer.ADSOYAD ?? "")
                             .Replace("@Telefon", customer.TELEFONNO ?? "")
                             .Replace("@İşGrubu", customer.ISGRUBU ?? "");
+
+                        string message = "";
+
+                        if (duzenlenmisAciklama.Contains(baseUrl))
+                        {
+                            string personalizedUrl = $"{baseUrl}?basvuruYetkili={Uri.EscapeDataString(customer.ADSOYAD)}%20{Uri.EscapeDataString(customer.TELEFONNO)}";
+                            string personalizedMessage = kisiyeOzelMesaj.Replace(baseUrl, personalizedUrl);
+
+                            message = personalizedMessage;
+                        }
+                        else
+                        {
+                            message = kisiyeOzelMesaj;
+                        }
 
                         if (Request.Form.Files.Count == 0)
                         {
@@ -566,7 +672,7 @@ namespace WPAPIProject.Controllers
                                 autoblacklist = false,
                                 blacklistlink = false,
                                 numbers = customer.TELEFONNO,
-                                message = kisiyeOzelMesaj
+                                message = message
                             };
 
                             request.AddJsonBody(payload);
@@ -585,7 +691,7 @@ namespace WPAPIProject.Controllers
                                     {
                                         MESAJTARIHI = DateTime.Now,
                                         CUSTOMERID = item.ID,
-                                        ATILANMESAJ = kisiyeOzelMesaj,
+                                        ATILANMESAJ = message,
                                         ATILANMESAJURL = ""
                                     };
                                     logList.Add(log);
@@ -639,7 +745,7 @@ namespace WPAPIProject.Controllers
                                         autoblacklist = false,
                                         blacklistlink = false,
                                         numbers = customer.TELEFONNO,
-                                        message = kisiyeOzelMesaj,
+                                        message = message,
                                         url = dosyaYollari[i]
                                     };
 
@@ -659,7 +765,7 @@ namespace WPAPIProject.Controllers
                                             {
                                                 MESAJTARIHI = DateTime.Now,
                                                 CUSTOMERID = item.ID,
-                                                ATILANMESAJ = kisiyeOzelMesaj,
+                                                ATILANMESAJ = message,
                                                 ATILANMESAJURL = dosyaUrlBirlesik
                                             };
                                             logList.Add(log);
@@ -735,7 +841,7 @@ namespace WPAPIProject.Controllers
                                     autoblacklist = false,
                                     blacklistlink = false,
                                     numbers = cleanedNumbers,
-                                    message = kisiyeOzelMesaj
+                                    message = message
                                 };
 
                                 request.AddJsonBody(payload);
@@ -754,7 +860,7 @@ namespace WPAPIProject.Controllers
                                         {
                                             MESAJTARIHI = DateTime.Now,
                                             CUSTOMERID = item.ID,
-                                            ATILANMESAJ = kisiyeOzelMesaj,
+                                            ATILANMESAJ = message,
                                             ATILANMESAJURL = dosyaUrlBirlesik
                                         };
                                         logList.Add(log);
@@ -958,7 +1064,7 @@ namespace WPAPIProject.Controllers
 
                                 requestx.AddJsonBody(payloadx);
 
-                                var responsex = await clientx.PostAsync<RestResponse>(requestx);                               
+                                var responsex = await clientx.PostAsync<RestResponse>(requestx);
                             }
 
                             var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");

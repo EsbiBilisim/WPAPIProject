@@ -1,0 +1,263 @@
+﻿@using WPAPIProject.Logic.Interfaces
+@inject ISqls sql;
+@{
+    ViewData["Title"] = "Log Kayıtları";
+
+    var kullanici = sql.KullaniciGetir("Kullanici");
+    var kullaniciId = kullanici.ID;
+}
+
+<style>
+    .dx-datagrid-group-panel, .dx-group-panel-message {
+        color: rebeccapurple !important;
+    }
+
+    .dx-row dx-column-lines, .dx-header-row {
+        color: red;
+        font-weight: bold;
+    }
+</style>
+
+<input type="hidden" id="kl" value="@kullaniciId" />
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title" style="color:red;">Log Kayıtları</h5>
+    </div>
+    <div class="card-body">
+        <div id="logs"></div>
+    </div>
+</div>
+
+<div id="filesModal" class="modal" tabindex="-1">
+    <div class="modal-dialog" style="min-width: 65%;">
+        <div class="modal-content">
+            <div class="modal-header bg-success">
+                <h5 class="modal-title">Dosyalar</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body" id="filesModalBody">
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section scripts {
+
+    <script>
+
+        $(document).ready(function () {
+            getir();
+        });
+
+        function getir() {
+            var kl = $("#kl").val();
+            $.ajax({
+                url: '/Home/FirmaMesajLogKayitlari',
+                method: 'GET',
+                success: function (response) {
+                    var obj = response.data.data;
+
+                    for (var i = 0; i < obj.length; i++) {
+                        var fields = ['MESAJTARIHI'];
+                        for (var j = 0; j < fields.length; j++) {
+                            var field = fields[j];
+                            if (obj[i][field]) {
+                                var tarih = new Date(obj[i][field]);
+                                obj[i][field] = tarih;
+                            }
+                        }
+                    }
+
+                    $("#logs").dxDataGrid({
+                        dataSource: obj,
+                        keyExpr: "ID",
+                        allowColumnResizing: true,
+                        columnResizingMode: "widget",
+                        showBorders: true,
+                        allowColumnReordering: true,
+                        sorting: {
+                            mode: "multiple"
+                        },
+                        showRowLines: true,
+                        paging: {
+                            enabled: true,
+                            size: 250
+                        },
+                        pager: {
+                            showPageSizeSelector: true,
+                            allowedPageSizes: [10, 20, 50,100],
+                            showNavigationButtons: true,
+                        },
+                        searchPanel: {
+                            visible: true,
+                            highlightCaseSensitive: true,
+                        },
+                        columnChooser: {
+                            enabled: true,
+                            mode: "select"
+                        },
+                        selection: {
+                            mode: 'single'
+                        },
+                        columnAutoWidth: true,
+                        width: '100%',
+                        focusedRowEnabled: true,
+                        columns: [
+                            {
+                                dataField: "ID",
+                                caption: "ID",
+                                visible: false,
+                            },
+                            {
+                                dataField: "MESAJTARIHI",
+                                caption: "Mesaj Tarihi",
+                                format: 'dd.MM.yyyy HH:mm:ss'
+                            },
+                            {
+                                dataField: "CUSTOMERNAME",
+                                caption: "Müşteri",
+                            },
+                            {
+                                dataField: "ATILANMESAJ",
+                                caption: "Atılan Mesaj",
+                            },
+                        ],
+                        height: '80vh',
+                        filterRow: {
+                            visible: true,
+                        },
+                        headerFilter: {
+                            visible: true,
+                        },
+                        groupPanel: {
+                            visible: true
+                        },
+                        export: {
+                            enabled: true,
+                        },
+                        onContextMenuPreparing: function (e) {
+                            if (e.target == "content") {
+
+                                const rowId = e.row.data.ID;
+
+                                e.items = [
+                                {
+                                    text: "Dosyalar",
+                                    onItemClick: function () {
+                                         LogKayitlariDosyalar(rowId);
+                                    }
+                                },
+                                ];
+                            }
+                        },
+                        stateStoring: {
+                            enabled: true,
+                            type: "localStorage",
+                            storageKey: "FirmaYetkiliTelWpLogs-" + kl,
+                            customLoad: function () {
+                                var state = localStorage.getItem(this.storageKey);
+                                if (state) {
+                                    state = JSON.parse(state);
+                                    for (var i = 0; i < state.columns.length; i++) {
+                                        state.columns[i].filterValue = null;
+                                    }
+                                    state.selectedRowKeys = null;
+                                }
+                                return state;
+                            },
+                            customSave: function (state) {
+                                localStorage.setItem(this.storageKey, JSON.stringify(state));
+                            },
+                        },
+                        onExporting: function (e) {
+                            var workbook = new ExcelJS.Workbook();
+                            var worksheet = workbook.addWorksheet('MesajLogKayitlari');
+                            DevExpress.excelExporter.exportDataGrid({
+                                worksheet: worksheet,
+                                component: e.component,
+                                customizeCell: function (options) {
+                                    var excelCell = options;
+                                    excelCell.font = {
+                                        name: 'Arial',
+                                        size: 12
+                                    };
+                                    excelCell.alignment = {
+                                        horizontal: 'left'
+                                    };
+                                }
+                            }).then(function () {
+                                workbook.xlsx.writeBuffer().then(function (buffer) {
+                                    saveAs(new Blob([buffer], {
+                                        type: 'application/octet-stream'
+                                    }), 'MesajLogKayitlari.xlsx');
+                                });
+                            });
+                            e.cancel = true;
+                        },
+                    });
+                }
+            });
+        }
+
+        function LogKayitlariDosyalar(rowId) {
+            showPleaseWait();
+            $.ajax({
+                url: '/Home/MesajLogKayitlariDosyalar',
+                method: 'POST',
+                data: { rowId },
+                success: function (response) {
+                    hidePleaseWait();
+
+                    if (response.success) {
+                        const modalBody = $("#filesModalBody");
+                        modalBody.empty();
+
+                        response.urls.forEach(url => {
+                            const fileType = url.split('.').pop().toLowerCase();
+
+                            if (['jpg', 'jpeg', 'png', 'gif'].includes(fileType)) {
+                                modalBody.append(`
+                                    <div>
+                                        <img src="${url}" class="img-thumbnail" style="width: 50%; margin: 5px; cursor: pointer;"
+                                             onclick="window.open('${url}', '_blank')">
+                                    </div>
+                                `);
+                            } else if (fileType === 'pdf') {
+                                modalBody.append(`
+                                    <div>
+                                        <a href="${url}" target="_blank" class="btn btn-link">PDF Görüntüle</a>
+                                    </div>
+                                `);
+                            } else {
+                                modalBody.append(`
+                                    <div>
+                                        <a href="${url}" target="_blank" class="btn btn-link">Dosyayı Görüntüle</a>
+                                    </div>
+                                `);
+                            }
+                        });
+
+                        $("#filesModal").modal("show");
+                    } else {
+                        alert(response.message);
+                    }
+                },
+                error: function () {
+                    hidePleaseWait();
+                    alert("Bir hata oluştu.");
+                }
+            });
+        }
+
+         $(window).on('beforeunload', function () {
+            let dataGrid = $("#logs").dxDataGrid("instance");
+            dataGrid.refresh();
+            dataGrid.clearSelection();
+            dataGrid.option("focusedRowIndex", -1);
+        });
+
+    </script>
+
+}
