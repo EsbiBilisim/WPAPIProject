@@ -1,11 +1,11 @@
 ﻿@model WPAPIProject.Models.W_FIRMS;
 
 @{
-    ViewData["Title"] = "FirmaBilgileriniDuzenle";
+    ViewData["Title"] = "Firma Bilgilerini Duzenle";
 }
 
 <div class="container-fluid mt-4">
-    <h3 class="text-center mb-4">Firma ve Kullanıcı Bilgileri</h3>
+    <h3 class="text-center mb-4">Firma Bilgileri</h3>
     <div class="row">
         <div class="col-md-6 mb-3">
             <label for="ID" class="form-label">ID</label>
@@ -52,15 +52,15 @@
     </div>
 
     <div class="row">
-        <div class="col-md-6 mb-3">
+        <div class="col-md-12 mb-3">
             <label for="OLUSTURMATARIHI" class="form-label">Oluşturma Tarihi</label>
             <input type="text" class="form-control" id="OLUSTURMATARIHI" value="@Model.OLUSTURMATARIHI" readonly />
         </div>
     </div>
     
     <div class="row">
-        <div class="col-md-12 mb-3">
-            <button class="btn btn-outline-primary" onclick="bilgiKaydet()">Kaydet</button>
+        <div class="col-md-12 mb-3" style="display: flex; justify-content:end;">
+            <button class="btn btn-primary pull-right" onclick="bilgiKaydet()">Kaydet</button>
         </div>
     </div>
 

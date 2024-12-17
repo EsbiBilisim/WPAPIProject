@@ -154,10 +154,49 @@
     </div>
 </div>
 
-
 @section scripts {
 
     <script>
+
+        function showProgressModal() {
+            if (document.querySelector("#progressModal") == null) {
+                var progressModal = `
+                    <div class="modal" id="progressModal" data-backdrop="static" data-keyboard="false" role="dialog">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 class="modal-title">Mesajlar Gönderiliyor...</h4>
+                                </div>
+                                <div class="modal-body">
+                                    <p id="progressText">Gönderilen: 0 / 0</p>
+                                    <div class="progress">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                             role="progressbar"
+                                             aria-valuemin="0" aria-valuemax="100"
+                                             style="width: 0%;"
+                                             id="progressBar">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                $(document.body).append(progressModal);
+            }
+
+            $("#progressModal").modal("show");
+        }
+
+        function updateProgressModal(sent, total) {
+            var percentage = Math.round((sent / total) * 100);
+            $("#progressText").text(`Gönderilen: ${sent} / ${total}`);
+            $("#progressBar").css("width", percentage + "%");
+        }
+
+        function hideProgressModal() {
+            $("#progressModal").modal("hide");
+        }
+
 
         $(document).ready(function () {
             $('#aciklama').val("");
@@ -261,6 +300,7 @@
                     success: function(response) {
                         if (response.sonuc) {
                             alert(response.mesaj);
+                            $('#file').val("");
                             getir();
                             hidePleaseWait();
                         }
@@ -307,11 +347,13 @@
         }
 
         function getir() {
+            showPleaseWait();
             var kl = $("#kl").val();
             $.ajax({
                 url: '/Home/FirmaMusterileriGetir',
                 method: 'GET',
                 success: function (response) {
+                    hidePleaseWait();
                     var obj = response.data.data;
 
                     for (var i = 0; i < obj.length; i++) {
@@ -478,42 +520,67 @@
         }
 
         function sendRequest() {
-            showPleaseWait();
+            showProgressModal();
+
             var selectedData = $('#firmaYetkiliTelefon').dxDataGrid('instance').getSelectedRowsData();
             var fileUpload = $("#istekDosya").get(0);
             var files = fileUpload.files;
 
             var aciklama = $('#aciklama').val();
             if (files.length === 0 && (!aciklama || aciklama.trim() === "")) {
-                hidePleaseWait();
+                hideProgressModal();
                 alert("Lütfen bir dosya yükleyin veya mesaj girin.");
                 return;
             }
+
+            var totalCustomers = selectedData.length;
+            var sentCount = 0;
 
             var fileData = new FormData();
             for (var i = 0; i < files.length; i++) {
                 fileData.append('files', files[i]);
             }
             fileData.append('aciklama', aciklama);
-            fileData.append('selectedData', JSON.stringify(selectedData));
 
-            $.ajax({
-                url: '/Home/MusteriWpMesajGonder',
-                method: 'POST',
-                contentType: false,
-                processData: false,
-                data: fileData,
-                success: function (response) {
-                    if (response.Sonuc === true) {
-                        hidePleaseWait();
-                        alert(response.Msg);
-                        window.location.reload();
-                    } else {
-                        hidePleaseWait();
-                        alert(response.Msg);
+            function sendMessage(index) {
+                if (index >= totalCustomers) {
+                    hideProgressModal();
+                    alert("Tüm mesajlar başarıyla gönderildi!");
+                    window.location.reload();
+                    return;
+                }
+
+                var customer = selectedData[index];
+                fileData.set('selectedData', JSON.stringify([customer]));
+
+                $.ajax({
+                    url: '/Home/MusteriWpMesajGonder',
+                    method: 'POST',
+                    contentType: false,
+                    processData: false,
+                    data: fileData,
+                    success: function (response) {
+                        if (response.Sonuc === true) {
+                            sentCount++;
+                            updateProgressModal(sentCount, totalCustomers);
+
+                            var randomDelay = Math.floor(Math.random() * (9000 - 1000)) + 1000;
+
+                            setTimeout(function () {
+                                sendMessage(index + 1);
+                            }, randomDelay);
+                        } else {
+                            alert(`Gönderim Hatası: ${response.Msg}`);
+                            hideProgressModal();
+                        }
+                    },
+                    error: function () {
+                        alert('Bir hata oluştu!');
+                        hideProgressModal();
                     }
-                },
-            });
+                });
+            }
+            sendMessage(0);
         }
 
         function duzenleGridi(dataGrid) {
