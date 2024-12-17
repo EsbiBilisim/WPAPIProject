@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using OfficeOpenXml;
@@ -37,6 +38,94 @@ namespace WPAPIProject.Controllers
         {
             return View();
         }
+
+        public IActionResult FirmaBilgileriniDuzenle()
+        {
+            var user = _sql.KullaniciGetir("Kullanici");
+
+            var firmaBilgileri = _db.W_FIRMS.Where(s => s.ID == user.ID).FirstOrDefault();
+
+            return View(firmaBilgileri);
+        }
+
+        [HttpPost]
+        public JsonResult firmaBilgiGuncelle(W_FIRMS firmaBilgileri)
+        {
+            try
+            {
+                //----------------------------------------------------------------------------
+                var existingFirma = _db.W_FIRMS.FirstOrDefault(s => s.ID == firmaBilgileri.ID);
+
+                var user = _sql.KullaniciGetir("Kullanici");
+                if (user == null)
+                {
+                    return Json(new { Success = false, Message = "Kullanıcı oturumu bulunamadı." });
+                }
+
+                var dbUser = _db.W_USERS.FirstOrDefault(u => u.ID == user.ID);
+
+                if (existingFirma == null)
+                {
+                    return Json(new { success = false, message = "Firma bulunamadı." });
+                }
+                //------------------------HATA KONTROLÜ----------------------------------
+                var missingFields = new List<string>();
+
+                if (string.IsNullOrEmpty(firmaBilgileri.FIRMAUNVANI))
+                    missingFields.Add("Firma Ünvanı");
+
+                if (string.IsNullOrEmpty(firmaBilgileri.YETKILIADISOYADI))
+                    missingFields.Add("Yetkili Adı Soyadı");
+
+                if (string.IsNullOrEmpty(firmaBilgileri.KULLANICISIFRESI))
+                    missingFields.Add("Kullanıcı Şifresi");
+
+                if (string.IsNullOrEmpty(firmaBilgileri.APITELEFONNO))
+                    missingFields.Add("API Telefon Numarası");
+
+                if (string.IsNullOrEmpty(firmaBilgileri.YETKILITELEFONNO))
+                    missingFields.Add("Yetkili Telefon Numarası");
+
+                if (string.IsNullOrEmpty(firmaBilgileri.WAPIKEY))
+                    missingFields.Add("WAPI Key");
+
+                if (firmaBilgileri.GUVENLIKKODU == 0)
+                    missingFields.Add("Güvenlik Kodu");
+
+                if (firmaBilgileri.ID == null) 
+                    missingFields.Add("ID");
+
+                if (missingFields.Any())
+                {
+                    string missingFieldsMessage = string.Join(", ", missingFields);
+                    return Json(new { success = false, message = $"Tüm alanların doldurulması zorunludur: {missingFieldsMessage}" });
+                }
+
+                //-----------------------FİRMA BİLGİLERİ-----------------------------------
+                existingFirma.FIRMAUNVANI = firmaBilgileri.FIRMAUNVANI;
+                existingFirma.YETKILIADISOYADI = firmaBilgileri.YETKILIADISOYADI;
+                existingFirma.KULLANICISIFRESI = firmaBilgileri.KULLANICISIFRESI;
+                existingFirma.APITELEFONNO = firmaBilgileri.APITELEFONNO;
+                existingFirma.YETKILITELEFONNO = firmaBilgileri.YETKILITELEFONNO;
+                existingFirma.WAPIKEY = firmaBilgileri.WAPIKEY;
+                existingFirma.GUVENLIKKODU = firmaBilgileri.GUVENLIKKODU;
+                //-----------------------KULLANICI BİLGİLERİ-------------------------------------
+                dbUser.GUVENLIKKODU_USER = firmaBilgileri.GUVENLIKKODU;
+                dbUser.KULLANICIADI_USER = firmaBilgileri.YETKILIADISOYADI;
+                dbUser.KULLANICISIFRESI_USER = firmaBilgileri.KULLANICISIFRESI;
+                dbUser.TELEFONNO_USER = firmaBilgileri.YETKILITELEFONNO;
+                //----------------------------------------------------------------------------
+
+                _db.SaveChanges();
+
+                return Json(new { success = true, message = "Firma bilgileri başarıyla güncellendi." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Bir hata oluştu: " + ex.Message });
+            }
+        }
+
 
         public IActionResult Logs()
         {

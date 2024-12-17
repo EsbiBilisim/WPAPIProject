@@ -1,0 +1,110 @@
+﻿@model WPAPIProject.Models.W_FIRMS;
+
+@{
+    ViewData["Title"] = "FirmaBilgileriniDuzenle";
+}
+
+<div class="container-fluid mt-4">
+    <h3 class="text-center mb-4">Firma ve Kullanıcı Bilgileri</h3>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="ID" class="form-label">ID</label>
+            <input type="text" class="form-control" id="ID" value="@Model.ID" readonly />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="FIRMAUNVANI" class="form-label">Firma Ünvanı</label>
+            <input type="text" class="form-control" id="FIRMAUNVANI" value="@Model.FIRMAUNVANI" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="YETKILIADISOYADI" class="form-label">Yetkili Adı Soyadı</label>
+            <input type="text" class="form-control" id="YETKILIADISOYADI" value="@Model.YETKILIADISOYADI" />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="KULLANICISIFRESI" class="form-label">Kullanıcı Şifresi</label>
+            <input type="text" class="form-control" id="KULLANICISIFRESI" value="@Model.KULLANICISIFRESI" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="APITELEFONNO" class="form-label">API Telefon Numarası</label>
+            <input type="text" class="form-control" id="APITELEFONNO" value="@Model.APITELEFONNO" />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="YETKILITELEFONNO" class="form-label">Yetkili Telefon Numarası</label>
+            <input type="text" class="form-control" id="YETKILITELEFONNO" value="@Model.YETKILITELEFONNO" />
+        </div>
+        
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="WAPIKEY" class="form-label">WAPI Key</label>
+            <input type="text" class="form-control" id="WAPIKEY" value="@Model.WAPIKEY" />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="GUVENLIKKODU" class="form-label">Güvenlik Kodu</label>
+            <input type="text" class="form-control" id="GUVENLIKKODU" onkeypress="return onlyNumbers(event)" value="@Model.GUVENLIKKODU" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="OLUSTURMATARIHI" class="form-label">Oluşturma Tarihi</label>
+            <input type="text" class="form-control" id="OLUSTURMATARIHI" value="@Model.OLUSTURMATARIHI" readonly />
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            <button class="btn btn-outline-primary" onclick="bilgiKaydet()">Kaydet</button>
+        </div>
+    </div>
+
+</div>
+
+
+<script>
+    function onlyNumbers(e) {
+        var charCode = e.which || e.keyCode; 
+        if (charCode < 48 || charCode > 57) { 
+            e.preventDefault();  
+            return false;
+        }
+        return true;   t
+    }
+
+    function bilgiKaydet(){
+
+        let firmaBilgileri = {
+            ID: $("#ID").val(),
+            FIRMAUNVANI: $("#FIRMAUNVANI").val(),
+            YETKILIADISOYADI: $("#YETKILIADISOYADI").val(),
+            KULLANICISIFRESI: $("#KULLANICISIFRESI").val(),
+            APITELEFONNO: $("#APITELEFONNO").val(),
+            YETKILITELEFONNO: $("#YETKILITELEFONNO").val(),
+            WAPIKEY: $("#WAPIKEY").val(),
+            GUVENLIKKODU: $("#GUVENLIKKODU").val(),
+            OLUSTURMATARIHI: $("#OLUSTURMATARIHI").val()
+        };
+
+        $.ajax({
+            url: '/Home/firmaBilgiGuncelle',  
+            method: 'POST',
+            data: firmaBilgileri,
+            success: function(response) {
+                if(response.success) {
+                    alert("Firma bilgileri başarıyla güncellendi.");
+                } else {
+                    alert("Bir hata oluştu: " + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                alert('Hata: ' + error);
+            }
+        });
+    }
+</script>
