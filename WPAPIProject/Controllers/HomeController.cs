@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using OfficeOpenXml;
@@ -798,7 +797,7 @@ namespace WPAPIProject.Controllers
                             Console.WriteLine($"API Hata: {response?.ErrorMessage}");
                         }
                     }
-                    else if (Request.Form.Files.Count == 1) 
+                    else if (Request.Form.Files.Count == 1)
                     {
                         if (message.Length <= 1024)
                         {
@@ -806,6 +805,38 @@ namespace WPAPIProject.Controllers
 
                             for (int i = 0; i < dosyaYollari.Count; i++)
                             {
+                                string dosyaUzantisi = Path.GetExtension(dosyaYollari[i]).ToLower();
+                                int messageType = 2; // Varsayılan olarak resim mesajı
+
+                                switch (dosyaUzantisi)
+                                {
+                                    case ".jpg":
+                                    case ".jpeg":
+                                    case ".png":
+                                    case ".gif":
+                                    case ".bmp":
+                                    case ".pdf":
+                                        messageType = 2; // Görsel mesaj
+                                        break;
+                                    //case ".pdf":
+                                    //    messageType = 3; // Belge mesajı
+                                    //    break;
+                                    case ".mp3":
+                                    case ".wav":
+                                    case ".ogg":
+                                        messageType = 4; // Sesli mesaj
+                                        break;
+                                    case ".mp4":
+                                    case ".avi":
+                                    case ".mov":
+                                    case ".mkv":
+                                        messageType = 5; // Video mesajı
+                                        break;
+                                    default:
+                                        Console.WriteLine($"Desteklenmeyen dosya uzantısı: {dosyaUzantisi}");
+                                        continue; // Geçersiz uzantılarda döngüden devam et
+                                }
+
                                 var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
                                 var client = new RestClient(options);
                                 var request = new RestRequest("");
@@ -815,7 +846,7 @@ namespace WPAPIProject.Controllers
 
                                 var payload = new
                                 {
-                                    type = 2,
+                                    type = messageType,
                                     interval = 1,
                                     autoblacklist = false,
                                     blacklistlink = false,
@@ -862,6 +893,37 @@ namespace WPAPIProject.Controllers
 
                             for (int i = 0; i < dosyaYollari.Count; i++)
                             {
+                                string dosyaUzantisi = Path.GetExtension(dosyaYollari[i]).ToLower();
+                                int messageType = 2; // Varsayılan olarak resim mesajı
+
+                                switch (dosyaUzantisi)
+                                {
+                                    case ".jpg":
+                                    case ".jpeg":
+                                    case ".png":
+                                    case ".gif":
+                                    case ".bmp":
+                                        messageType = 2; // Görsel mesaj
+                                        break;
+                                    case ".pdf":
+                                        messageType = 3; // Belge mesajı
+                                        break;
+                                    case ".mp3":
+                                    case ".wav":
+                                    case ".ogg":
+                                        messageType = 4; // Sesli mesaj
+                                        break;
+                                    case ".mp4":
+                                    case ".avi":
+                                    case ".mov":
+                                    case ".mkv":
+                                        messageType = 5; // Video mesajı
+                                        break;
+                                    default:
+                                        Console.WriteLine($"Desteklenmeyen dosya uzantısı: {dosyaUzantisi}");
+                                        continue; // Geçersiz uzantılarda döngüden devam et
+                                }
+
                                 var optionsx = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
                                 var clientx = new RestClient(optionsx);
                                 var requestx = new RestRequest("");
@@ -871,7 +933,7 @@ namespace WPAPIProject.Controllers
 
                                 var payloadx = new
                                 {
-                                    type = 2,
+                                    type = messageType,
                                     interval = 1,
                                     autoblacklist = false,
                                     blacklistlink = false,
@@ -940,6 +1002,37 @@ namespace WPAPIProject.Controllers
 
                         for (int i = 0; i < dosyaYollari.Count; i++)
                         {
+                            string dosyaUzantisi = Path.GetExtension(dosyaYollari[i]).ToLower();
+                            int messageType = 2; // Varsayılan olarak resim mesajı
+
+                            switch (dosyaUzantisi)
+                            {
+                                case ".jpg":
+                                case ".jpeg":
+                                case ".png":
+                                case ".gif":
+                                case ".bmp":
+                                    messageType = 2; // Görsel mesaj
+                                    break;
+                                case ".pdf":
+                                    messageType = 3; // Belge mesajı
+                                    break;
+                                case ".mp3":
+                                case ".wav":
+                                case ".ogg":
+                                    messageType = 4; // Sesli mesaj
+                                    break;
+                                case ".mp4":
+                                case ".avi":
+                                case ".mov":
+                                case ".mkv":
+                                    messageType = 5; // Video mesajı
+                                    break;
+                                default:
+                                    Console.WriteLine($"Desteklenmeyen dosya uzantısı: {dosyaUzantisi}");
+                                    continue; // Geçersiz uzantılarda döngüden devam et
+                            }
+
                             var optionsx = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
                             var clientx = new RestClient(optionsx);
                             var requestx = new RestRequest("");
@@ -949,7 +1042,7 @@ namespace WPAPIProject.Controllers
 
                             var payloadx = new
                             {
-                                type = 2,
+                                type = messageType,
                                 interval = 1,
                                 autoblacklist = false,
                                 blacklistlink = false,
