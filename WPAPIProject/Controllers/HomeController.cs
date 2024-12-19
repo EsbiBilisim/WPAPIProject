@@ -670,10 +670,21 @@ namespace WPAPIProject.Controllers
 
                 var aciklama = Request.Form["aciklama"].ToString();
 
+                string duzen = "";
+
+                if (aciklama.Contains("Sakarya Serbest Muhasebeci Mali Müşavirler Odası"))
+                {
+                    duzen = "*Değerli Mali Müşavir Dostumuz,*\n\n" + aciklama; 
+                }
+                else
+                {
+                    duzen = aciklama;
+                }
+
                 var selectedDataJson = Request.Form["selectedData"];
                 var selectedData = JsonConvert.DeserializeObject<List<W_CUSTOMERS>>(selectedDataJson);
 
-                string duzenlenmisAciklama = aciklama.Replace("\n", " ").Replace("\r", "");
+                //string duzenlenmisAciklama = aciklama.Replace("\n", " ").Replace("\r", "");
 
                 var firma = _db.W_FIRMS.Where(s => s.ID == kullanici.FIRMID).FirstOrDefault();
 
@@ -720,22 +731,22 @@ namespace WPAPIProject.Controllers
                     }
                 }
 
-                bool containsPlaceholders = duzenlenmisAciklama.Contains("@AdSoyad") ||
-                                    duzenlenmisAciklama.Contains("@Telefon") ||
-                                    duzenlenmisAciklama.Contains("@İşGrubu");
+                bool containsPlaceholders = duzen.Contains("@AdSoyad") ||
+                                    duzen.Contains("@Telefon") ||
+                                    duzen.Contains("@İşGrubu");
 
                 string baseUrl = "https://www.esbi.com.tr/logobuluterplite/logobuluterplite_basvuru.php";
 
                 foreach (var customer in selectedData)
                 {
-                    string kisiyeOzelMesaj = duzenlenmisAciklama
+                    string kisiyeOzelMesaj = duzen
                         .Replace("@AdSoyad", customer.ADSOYAD ?? "")
                         .Replace("@Telefon", customer.TELEFONNO ?? "")
                         .Replace("@İşGrubu", customer.ISGRUBU ?? "");
 
                     string message = "";
 
-                    if (duzenlenmisAciklama.Contains(baseUrl))
+                    if (duzen.Contains(baseUrl))
                     {
                         string personalizedUrl = $"{baseUrl}?basvuruYetkili={Uri.EscapeDataString(customer.ADSOYAD)}%20{Uri.EscapeDataString(customer.TELEFONNO)}";
                         string personalizedMessage = kisiyeOzelMesaj.Replace(baseUrl, personalizedUrl);
