@@ -64,7 +64,6 @@
             #mention-dropdown li:hover {
                 background-color: #f0f0f0;
             }
-
 </style>
 
 <input type="hidden" id="kl" value="@kullaniciId" />
@@ -82,18 +81,14 @@
     </div>
     <div class="card-body">
         <div id="firmaYetkiliTelefon" style="margin-bottom:15px;"></div>
-
         <span class="headers">Mesaj</span>
         <div style="position: relative;">
-
-            <textarea id="aciklama" style="border: 1px solid #ccc; padding: 5px; min-height: 100px; width: 100%;" placeholder="Lütfen bir dosya yükleyin veya mesaj girin."></textarea>
+            <textarea id="aciklama" style="border: 1px solid #ccc; padding: 5px; min-height: 100px; width: 100%;" placeholder="Lütfen bir dosya yükleyin veya mesaj girin. ME"></textarea>
             <ul id="mention-dropdown" style="position: absolute; display: none; border: 1px solid #ccc; background: white; list-style: none; padding: 5px;"></ul>
-
-
         </div>
     </div>
     <div class="card-footer" style="display:flex; justify-content:flex-end;">
-        <input type="file" id="istekDosya" class="form-control-file" style="background-color: skyblue; padding:2px;" multiple accept=".pdf,image/*">
+        <input type="file" id="istekDosya" class="form-control-file" style="background-color: skyblue; padding:2px;" multiple>
         <button class="btn btn-success" style="margin-right:10px; margin-left:10px;" onclick="openConfirmationModal()">Gönder</button>
     </div>
 </div>
@@ -102,10 +97,7 @@
     <div class="modal-dialog" role="document" style="min-width:65%;">
         <div class="modal-content">
             <div class="modal-header bg-success">
-                <div style="display: flex; justify-content:flex-start; align-items: center;">
-                    <button type="button" class="btn btn-primary" onclick="confirmSend()" style="margin-right:10px;">Evet</button>
-                    <button type="button" class="btn btn-warning" data-dismiss="modal">Hayır</button>
-                </div>
+                Onay
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
             </div>
             <div class="modal-body">
@@ -114,6 +106,10 @@
                 <div id="selectedContacts" style="max-height:300px; overflow-y:scroll; padding:5px; margin-bottom:15px; border:1px solid;"></div>
                 <p><strong>Açıklama:</strong> <span id="selectedDescription"></span></p>
                 <p>Onaylıyor Musunuz?</p>
+                <div style="display: flex; justify-content:flex-end; align-items: center;">
+                    <button type="button" class="btn btn-primary" onclick="confirmSend()" style="margin-right:10px;">Evet</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">Hayır</button>
+                </div>
             </div>
         </div>
     </div>
@@ -155,6 +151,7 @@
 </div>
 
 @section scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.9/signalr.min.js"></script>
 
     <script>
 
@@ -165,7 +162,7 @@
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
-                                    <h4 class="modal-title">Mesajlar Gönderiliyor...</h4>
+                                    <h4 class="modal-title">Lütfen Bekleyiniz...</h4>
                                 </div>
                                 <div class="modal-body">
                                     <p id="progressText">Gönderilen: 0 / 0</p>
@@ -197,15 +194,15 @@
             $("#progressModal").modal("hide");
         }
 
-
         $(document).ready(function () {
             $('#aciklama').val("");
-             $('#istekDosya').val("");
-              $('#file').val("");
+            $('#istekDosya').val("");
+            $('#file').val("");
 
-             getir();
+            getir();
+        });
 
-            document.getElementById('aciklama').addEventListener('input', function (e) {
+        document.getElementById('aciklama').addEventListener('input', function (e) {
                 const mentionDropdown = document.getElementById('mention-dropdown');
                 const value = e.target.value;
 
@@ -255,7 +252,7 @@
                 }
             });
 
-            function getCaretCoordinates(input, position) {
+        function getCaretCoordinates(input, position) {
                 const div = document.createElement('div');
                 const style = window.getComputedStyle(input);
 
@@ -280,9 +277,7 @@
                 return { left: rect.left, top: rect.top };
             }
 
-        $('#uploadButton').click(function(e) {
-            showPleaseWait();
-
+        $('#uploadButton').click(function (e) {
             e.preventDefault();
 
             var fileInput = $('#file')[0];
@@ -291,35 +286,52 @@
             if (fileInput.files.length > 0) {
                 formData.append("file", fileInput.files[0]);
 
-                $.ajax({
-                    url: '/Home/Upload',
-                    type: 'POST',
-                    data: formData,
-                    contentType: false,
-                    processData: false,
-                    success: function(response) {
-                        if (response.sonuc) {
-                            alert(response.mesaj);
-                            $('#file').val("");
-                            getir();
-                            hidePleaseWait();
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        var response = xhr.responseJSON;
-                        if (response) {
-                            alert(response.mesaj);
-                        } else {
-                            alert(response.mesaj);
-                        }
-                    }
+                // Modal gösterimi
+                showProgressModal();
+
+                // SignalR bağlantısını başlat
+                const connection = new signalR.HubConnectionBuilder()
+                    .withUrl("/progressHub")
+                    .build();
+
+                connection.on("ReceiveProgress", (message, percentage) => {
+                    // İlerleme modalindeki bilgileri güncelle
+                    $("#progressText").text(message);
+                    $("#progressBar").css("width", percentage + "%").text(percentage + "%");
                 });
+
+                connection.start()
+                    .then(() => {
+                        // Dosyayı yükle
+                        $.ajax({
+                            url: '/Home/Upload',
+                            type: 'POST',
+                            data: formData,
+                            contentType: false,
+                            processData: false,
+                            success: function (response) {
+                                if (response.sonuc) {
+                                    alert(response.mesaj);
+                                    $('#file').val("");
+                                    getir(); // Bu sizin mevcut dosya listesi yenileme işleviniz olabilir
+                                    $("#progressModal").modal("hide"); // Modalı gizle
+                                }
+                            },
+                            error: function (xhr, status, error) {
+                                var response = xhr.responseJSON;
+                                if (response) {
+                                    alert(response.mesaj);
+                                } else {
+                                    alert("Bir hata oluştu.");
+                                }
+                                $("#progressModal").modal("hide"); // Modalı gizle
+                            }
+                        });
+                    })
+                    .catch(err => console.error("SignalR bağlantısı başlatılamadı: ", err.toString()));
             } else {
-                hidePleaseWait();
                 alert("Lütfen bir dosya seçin.");
-                // $('#responseMessage').html('<div class="alert alert-warning">Lütfen bir dosya seçin.</div>');
-                }
-            });
+            }
         });
 
         function openConfirmationModal() {
@@ -540,47 +552,68 @@
             for (var i = 0; i < files.length; i++) {
                 fileData.append('files', files[i]);
             }
-            fileData.append('aciklama', aciklama);
 
-            function sendMessage(index) {
-                if (index >= totalCustomers) {
-                    hideProgressModal();
-                    alert("Tüm mesajlar başarıyla gönderildi!");
-                    window.location.reload();
-                    return;
-                }
+            $.ajax({
+                url: '/Home/UploadFilesAndReturnPaths',
+                method: 'POST',
+                contentType: false,
+                processData: false,
+                data: fileData,
+                success: function (response) {
+                    if (response.success) {
+                        var dosyaYollari = response.dosyaYollari;
 
-                var customer = selectedData[index];
-                fileData.set('selectedData', JSON.stringify([customer]));
+                        function sendMessage(index) {
+                            if (index >= totalCustomers) {
+                                hideProgressModal();
+                                alert("Tüm mesajlar başarıyla gönderildi!");
+                                window.location.reload();
+                                return;
+                            }
 
-                $.ajax({
-                    url: '/Home/MusteriWpMesajGonder',
-                    method: 'POST',
-                    contentType: false,
-                    processData: false,
-                    data: fileData,
-                    success: function (response) {
-                        if (response.Sonuc === true) {
-                            sentCount++;
-                            updateProgressModal(sentCount, totalCustomers);
+                            var customer = selectedData[index];
+                            var requestData = {
+                                aciklama: aciklama,
+                                selectedData: [customer],
+                                dosyaYollari: dosyaYollari
+                            };
 
-                            var randomDelay = Math.floor(Math.random() * (9000 - 1000)) + 1000;
+                            $.ajax({
+                                url: '/Home/MusteriWpMesajGonder',
+                                method: 'POST',
+                                data: requestData,
+                                success: function (response) {
+                                    if (response.Sonuc === true) {
+                                        sentCount++;
+                                        updateProgressModal(sentCount, totalCustomers);
 
-                            setTimeout(function () {
-                                sendMessage(index + 1);
-                            }, randomDelay);
-                        } else {
-                            alert(`Gönderim Hatası: ${response.Msg}`);
-                            hideProgressModal();
+                                        var randomDelay = Math.floor(Math.random() * (9000 - 1000)) + 1000;
+
+                                        setTimeout(function () {
+                                            sendMessage(index + 1);
+                                        }, randomDelay);
+                                    } else {
+                                        alert(`Gönderim Hatası: ${response.Msg}`);
+                                        hideProgressModal();
+                                    }
+                                },
+                                error: function () {
+                                    alert('Bir hata oluştu!');
+                                    hideProgressModal();
+                                }
+                            });
                         }
-                    },
-                    error: function () {
-                        alert('Bir hata oluştu!');
+                        sendMessage(0);
+                    } else {
                         hideProgressModal();
+                        alert('Dosya yükleme sırasında hata oluştu!');
                     }
-                });
-            }
-            sendMessage(0);
+                },
+                error: function () {
+                    hideProgressModal();
+                    alert('Dosya yükleme sırasında bir hata oluştu!');
+                }
+            });
         }
 
         function duzenleGridi(dataGrid) {

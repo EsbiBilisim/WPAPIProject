@@ -1,15 +1,18 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using System;
+using WPAPIProject.Logic;
 using WPAPIProject.Logic.Interfaces;
 using WPAPIProject.Logic.Repository;
 using WPAPIProject.Models;
+
 
 namespace WPAPIProject
 {
@@ -40,6 +43,13 @@ namespace WPAPIProject
             services.TryAddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddMemoryCache();
             services.AddScoped<ISqls, Sqls>();
+
+            services.Configure<FormOptions>(options =>
+            {
+                options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+            });
+
+            services.AddSignalR();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -66,13 +76,8 @@ namespace WPAPIProject
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller=Home}/{action=Login}/{id?}");
+                endpoints.MapHub<ProgressHub>("/progressHub");
             });
-
-            //app.UseEndpoints(endpoints => {
-            //    endpoints.MapControllers();
-            //    endpoints.MapDefaultControllerRoute();
-            //    endpoints.MapRazorPages();
-            //});
         }
     }
 }

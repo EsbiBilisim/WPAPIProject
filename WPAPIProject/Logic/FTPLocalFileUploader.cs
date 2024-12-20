@@ -2,43 +2,63 @@
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace WPAPIProject.Logic
 {
     public class FTPLocalFileUploader
     {
-        public string UploadToServer(byte[] file, string fileName, string fileExtension, int firmId)
+        public async Task<string> UploadToServerAsync(byte[] file, string fileName, string fileExtension, int firmId)
         {
             string root = @"ftp://10.0.54.32:21/";
+
             //string root = @"ftp://185.252.41.50/";
+
             string filePath = $"{ToUrlSlug(fileName)}{fileExtension}";
             string filePathUpdated = root + $"/WPAPIProject/{firmId}/" + filePath;
 
             CreateFtpDirectory(root, $"WPAPIProject/{firmId}");
 
-            // Dosyayı yükle
-            try
+            const int maxRetries = 3;
+            const int delayBetweenRetriesMs = 5000;
+
+            int attempt = 0;
+            while (attempt < maxRetries)
             {
-                var request = (FtpWebRequest)WebRequest.Create(filePathUpdated);
-                request.Method = WebRequestMethods.Ftp.UploadFile;
-                request.Credentials = new NetworkCredential("ftpuser", "Esbi1234!!");
-
-                using (var stream = request.GetRequestStream())
+                try
                 {
-                    stream.Write(file, 0, file.Length);
+                    attempt++;
+
+                    var request = (FtpWebRequest)WebRequest.Create(filePathUpdated);
+                    request.Method = WebRequestMethods.Ftp.UploadFile;
+                    request.Credentials = new NetworkCredential("ftpuser", "Esbi1234!!");
+
+                    using (var stream = request.GetRequestStream())
+                    {
+                        await stream.WriteAsync(file, 0, file.Length);
+                    }
+
+                    using (var response = (FtpWebResponse)await request.GetResponseAsync())
+                    {
+                        Console.WriteLine($"Upload File Complete, status {response.StatusDescription}");
+                    }
+
+                    return "https://sakaryaservis.com/Uploads/" + $"/WPAPIProject/{firmId}/" + filePath;
                 }
-
-                using (var response = (FtpWebResponse)request.GetResponse())
+                catch (Exception ex)
                 {
-                    Console.WriteLine($"Upload File Complete, status {response.StatusDescription}");
+                    Console.WriteLine($"Attempt {attempt} failed: {ex.Message}");
+
+                    if (attempt >= maxRetries)
+                    {
+                        return "0";
+                    }
+
+                    await Task.Delay(delayBetweenRetriesMs);
                 }
             }
-            catch (Exception)
-            {
-                return "0";
-            }
 
-            return "https://sakaryaservis.com/Uploads/" + $"/WPAPIProject/{firmId}/" + filePath;
+            return "0"; 
         }
 
         private void CreateFtpDirectory(string root, string directoryPath)
@@ -64,7 +84,6 @@ namespace WPAPIProject.Logic
                 }
             }
         }
-
         protected string ToUrlSlug(string value)
         {
             value = value.ToLowerInvariant();

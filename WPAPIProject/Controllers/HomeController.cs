@@ -3,6 +3,7 @@ using DevExtreme.AspNet.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -445,7 +446,7 @@ namespace WPAPIProject.Controllers
         }
 
         [HttpPost]
-        public IActionResult Upload(IFormFile file, [FromServices] IConfiguration configuration)
+        public async Task<IActionResult> Upload(IFormFile file, [FromServices] IConfiguration configuration, [FromServices] IHubContext<ProgressHub> hubContext)
         {
             if (file == null || file.Length == 0)
             {
@@ -465,7 +466,7 @@ namespace WPAPIProject.Controllers
 
                 string connectionString = configuration.GetConnectionString("AppDbContext");
 
-                SaveToDatabase(dataTable, connectionString, kullanici);
+                await SaveToDatabase(dataTable, connectionString, kullanici, hubContext);
 
                 return Ok(new { sonuc = true, mesaj = "Veriler başarıyla yüklendi ve kaydedildi." });
             }
@@ -561,10 +562,13 @@ namespace WPAPIProject.Controllers
             return columnIndexes;
         }
 
-        private void SaveToDatabase(DataTable dataTable, string connectionString, object kullanici)
+        private async Task SaveToDatabase(DataTable dataTable, string connectionString, object kullanici, IHubContext<ProgressHub> hubContext)
         {
             var firmId = kullanici as W_USERS;
             string tableName = $"W_CUSTOMERS_{firmId.FIRMID}";
+
+            int totalRows = dataTable.Rows.Count;
+            int processedRows = 0;
 
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
@@ -572,95 +576,101 @@ namespace WPAPIProject.Controllers
 
                 foreach (DataRow row in dataTable.Rows)
                 {
-                    bool isValid = true;
+                    processedRows++;
 
+                    bool isValid = true;
                     string phoneNumber = row["TELEFONNO"].ToString();
                     try
                     {
                         phoneNumber = FormatPhoneNumber(phoneNumber);
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        Console.WriteLine($"Hatalı telefon numarası: {phoneNumber}. Hata: {ex.Message}");
                         isValid = false;
                     }
 
-                    if (!isValid)
-                    {
-                        continue;
-                    }
+                    if (!isValid) continue;
 
                     string checkQuery = $@"SELECT COUNT(*) FROM {tableName} WHERE TELEFONNO = @TELEFONNO";
-
                     using (SqlCommand checkCommand = new(checkQuery, connection))
                     {
-                        checkCommand.Parameters.AddWithValue("@TELEFONNO", row["TELEFONNO"]);
-
+                        checkCommand.Parameters.AddWithValue("@TELEFONNO", phoneNumber);
                         int count = (int)checkCommand.ExecuteScalar();
-                        if (count > 0)
-                        {
-                            continue;
-                        }
+                        if (count > 0) continue;
                     }
 
-                    var columnNames = new List<string>();
-                    var parameterNames = new List<string>();
-                    var parameters = new Dictionary<string, object>();
-
-                    foreach (DataColumn column in dataTable.Columns)
-                    {
-                        string columnName = column.ColumnName.Trim();
-                        string normalizedColumnName = columnName.ToUpper();
-
-                        if (normalizedColumnName == "İŞ GRUBU" || normalizedColumnName == "İS GRUBU" || normalizedColumnName == "İSGRUBU")
-                        {
-                            columnName = "ISGRUBU";
-                        }
-                        else if (normalizedColumnName == "AD SOYAD" || normalizedColumnName == "ADSOYAD" || normalizedColumnName == "ADI SOYADI")
-                        {
-                            columnName = "ADSOYAD";
-                        }
-                        else if (normalizedColumnName == "TEL" || normalizedColumnName == "TEL NO" || normalizedColumnName == "TELEFON NO")
-                        {
-                            columnName = "TELEFONNO";
-                        }
-
-                        string parameterName = $"@{columnName}";
-
-                        columnNames.Add(columnName);
-                        parameterNames.Add(parameterName);
-                        parameters.Add(parameterName, row[column.ColumnName]);
-                    }
-
-                    columnNames.Add("EKLENMETARIHI");
-                    parameterNames.Add("@EKLENMETARIHI");
-                    parameters.Add("@EKLENMETARIHI", DateTime.Now);
-
-                    columnNames.Add("AKTIF");
-                    parameterNames.Add("@AKTIF");
-                    parameters.Add("@AKTIF", true);
+                    var columnNames = new List<string> { "TELEFONNO", "ADSOYAD", "ISGRUBU", "EKLENMETARIHI", "AKTIF" };
+                    var parameterNames = new List<string> { "@TELEFONNO", "@ADSOYAD", "@ISGRUBU", "@EKLENMETARIHI", "@AKTIF" };
+                    var parameters = new Dictionary<string, object>
+            {
+                { "@TELEFONNO", row["TELEFONNO"] },
+                { "@ADSOYAD", row["ADSOYAD"] },
+                { "@ISGRUBU", row["ISGRUBU"] },
+                { "@EKLENMETARIHI", DateTime.Now },
+                { "@AKTIF", true }
+            };
 
                     string query = $@"
-                            INSERT INTO {tableName} 
-                            ({string.Join(", ", columnNames)}) 
-                            VALUES 
-                            ({string.Join(", ", parameterNames)})";
+                INSERT INTO {tableName} 
+                ({string.Join(", ", columnNames)}) 
+                VALUES 
+                ({string.Join(", ", parameterNames)})";
 
-                    using (SqlCommand command = new SqlCommand(query, connection))
+                    using (SqlCommand command = new(query, connection))
                     {
                         foreach (var parameter in parameters)
                         {
                             command.Parameters.AddWithValue(parameter.Key, parameter.Value ?? DBNull.Value);
                         }
 
-                        command.ExecuteNonQuery();
+                        await command.ExecuteNonQueryAsync();
                     }
+
+                    int progress = (processedRows * 100) / totalRows;
+                    await hubContext.Clients.All.SendAsync("ReceiveProgress", $"İşleniyor: {processedRows}/{totalRows}", progress);
                 }
             }
         }
 
+        public async Task<JsonResult> UploadFilesAndReturnPaths()
+        {
+            var kullanici = _sql.KullaniciGetir("Kullanici");
+
+            List<string> dosyaYollari = new List<string>();
+
+            if (Request.Form.Files.Count > 0)
+            {
+                var files = Request.Form.Files;
+
+                foreach (var file in files)
+                {
+                    var fileExtension = Path.GetExtension(file.FileName).ToLower();
+                    var originalFileName = Path.GetFileNameWithoutExtension(file.FileName);
+                    string fname = originalFileName + fileExtension;
+
+                    using (Stream fs = file.OpenReadStream())
+                    {
+                        using (BinaryReader br = new BinaryReader(fs))
+                        {
+                            byte[] bytes = br.ReadBytes((int)file.Length);
+
+                            FTPLocalFileUploader up = new FTPLocalFileUploader();
+                            string result = await up.UploadToServerAsync(bytes, originalFileName, fileExtension, kullanici.FIRMID);
+
+                            if (result != "0")
+                            {
+                                dosyaYollari.Add(result);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return Json(new { success = true, dosyaYollari = dosyaYollari });
+        }
+
         [HttpPost]
-        public async Task<JsonResult> MusteriWpMesajGonder()
+        public async Task<JsonResult> MusteriWpMesajGonder(string aciklama, List<W_CUSTOMERS> selectedData, List<string> dosyaYollari)
         {
             try
             {
@@ -668,459 +678,162 @@ namespace WPAPIProject.Controllers
 
                 string tableName = $"W_MESSAGES_{kullanici.FIRMID}";
 
-                var aciklama = Request.Form["aciklama"].ToString();
-
-                string duzen = "";
-
-                if (aciklama.Contains("Sakarya Serbest Muhasebeci Mali Müşavirler Odası"))
-                {
-                    duzen = "*Değerli Mali Müşavir Dostumuz,*\n\n" + aciklama; 
-                }
-                else
-                {
-                    duzen = aciklama;
-                }
-
-                var selectedDataJson = Request.Form["selectedData"];
-                var selectedData = JsonConvert.DeserializeObject<List<W_CUSTOMERS>>(selectedDataJson);
-
-                //string duzenlenmisAciklama = aciklama.Replace("\n", " ").Replace("\r", "");
-
                 var firma = _db.W_FIRMS.Where(s => s.ID == kullanici.FIRMID).FirstOrDefault();
-
-                string cleanedNumbers = string.Join(",", selectedData.Select(s => s.TELEFONNO).ToList());
-
-                List<string> dosyaYollari = new List<string>();
-                List<string> dosyaAdlari = new List<string>();
-
-                var random = new Random();
-                int delayTime = random.Next(1000, 3000);
-                await Task.Delay(delayTime);
-
-                if (Request.Form.Files.Count > 0)
-                {
-                    var files = Request.Form.Files;
-
-                    for (int i = 0; i < files.Count; i++)
-                    {
-                        var file = files[i];
-
-                        if (file != null && file.Length > 0)
-                        {
-                            var fileExtension = Path.GetExtension(file.FileName).ToLower();
-                            var originalFileName = Path.GetFileNameWithoutExtension(file.FileName);
-                            string fname = originalFileName + fileExtension;
-
-                            using (Stream fs = file.OpenReadStream())
-                            {
-                                using (BinaryReader br = new BinaryReader(fs))
-                                {
-                                    byte[] bytes = br.ReadBytes((int)file.Length);
-
-                                    FTPLocalFileUploader up = new FTPLocalFileUploader();
-                                    string son = up.UploadToServer(bytes, originalFileName, fileExtension, kullanici.FIRMID);
-
-                                    if (son != "0")
-                                    {
-                                        dosyaYollari.Add(son);
-                                        dosyaAdlari.Add(fname);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                bool containsPlaceholders = duzen.Contains("@AdSoyad") ||
-                                    duzen.Contains("@Telefon") ||
-                                    duzen.Contains("@İşGrubu");
-
                 string baseUrl = "https://www.esbi.com.tr/logobuluterplite/logobuluterplite_basvuru.php";
 
                 foreach (var customer in selectedData)
                 {
-                    string kisiyeOzelMesaj = duzen
+                    string kisiyeOzelMesaj = aciklama
                         .Replace("@AdSoyad", customer.ADSOYAD ?? "")
                         .Replace("@Telefon", customer.TELEFONNO ?? "")
                         .Replace("@İşGrubu", customer.ISGRUBU ?? "");
 
-                    string message = "";
-
-                    if (duzen.Contains(baseUrl))
+                    if (aciklama.Contains(baseUrl))
                     {
                         string personalizedUrl = $"{baseUrl}?basvuruYetkili={Uri.EscapeDataString(customer.ADSOYAD)}%20{Uri.EscapeDataString(customer.TELEFONNO)}";
-                        string personalizedMessage = kisiyeOzelMesaj.Replace(baseUrl, personalizedUrl);
-
-                        message = personalizedMessage;
-                    }
-                    else
-                    {
-                        message = kisiyeOzelMesaj;
+                        kisiyeOzelMesaj = kisiyeOzelMesaj.Replace(baseUrl, personalizedUrl);
                     }
 
-                    if (Request.Form.Files.Count == 0)
-                    {
-                        var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
-                        var client = new RestClient(options);
-                        var request = new RestRequest("");
-                        request.AddHeader("accept", "application/json");
-                        request.AddHeader("Accept-Language", "tr");
-                        request.AddHeader("wapikey", firma.WAPIKEY);
-
-                        var payload = new
-                        {
-                            type = 1,
-                            interval = 1,
-                            autoblacklist = false,
-                            blacklistlink = false,
-                            numbers = customer.TELEFONNO,
-                            message = message
-                        };
-
-                        request.AddJsonBody(payload);
-
-                        var response = await client.PostAsync<RestResponse>(request);
-
-                        if (response != null && (response.IsSuccessful || response.StatusCode == 0))
-                        {
-                            Console.WriteLine($"API Yanıtı: {response.Content}");
-
-                            using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
-                            {
-                                connection.Open();
-
-                                string query = $@"
-                            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
-                            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
-
-                                using (var command = new SqlCommand(query, connection))
-                                {
-                                    command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
-                                    command.Parameters.AddWithValue("@CUSTOMERID", customer.ID);
-                                    command.Parameters.AddWithValue("@ATILANMESAJ", message);
-                                    command.Parameters.AddWithValue("@ATILANMESAJURL", "");
-                                    command.ExecuteNonQuery();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine($"API Hata: {response?.ErrorMessage}");
-                        }
-                    }
-                    else if (Request.Form.Files.Count == 1)
-                    {
-                        if (message.Length <= 1024)
-                        {
-                            string dosyaUrlBirlesik = string.Join(",", dosyaYollari);
-
-                            for (int i = 0; i < dosyaYollari.Count; i++)
-                            {
-                                string dosyaUzantisi = Path.GetExtension(dosyaYollari[i]).ToLower();
-                                int messageType = 2; // Varsayılan olarak resim mesajı
-
-                                switch (dosyaUzantisi)
-                                {
-                                    case ".jpg":
-                                    case ".jpeg":
-                                    case ".png":
-                                    case ".gif":
-                                    case ".bmp":
-                                    case ".pdf":
-                                        messageType = 2; // Görsel mesaj
-                                        break;
-                                    //case ".pdf":
-                                    //    messageType = 3; // Belge mesajı
-                                    //    break;
-                                    case ".mp3":
-                                    case ".wav":
-                                    case ".ogg":
-                                        messageType = 4; // Sesli mesaj
-                                        break;
-                                    case ".mp4":
-                                    case ".avi":
-                                    case ".mov":
-                                    case ".mkv":
-                                        messageType = 5; // Video mesajı
-                                        break;
-                                    default:
-                                        Console.WriteLine($"Desteklenmeyen dosya uzantısı: {dosyaUzantisi}");
-                                        continue; // Geçersiz uzantılarda döngüden devam et
-                                }
-
-                                var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
-                                var client = new RestClient(options);
-                                var request = new RestRequest("");
-                                request.AddHeader("accept", "application/json");
-                                request.AddHeader("Accept-Language", "tr");
-                                request.AddHeader("wapikey", firma.WAPIKEY);
-
-                                var payload = new
-                                {
-                                    type = messageType,
-                                    interval = 1,
-                                    autoblacklist = false,
-                                    blacklistlink = false,
-                                    numbers = customer.TELEFONNO,
-                                    message = message,
-                                    url = dosyaYollari[i]
-                                };
-
-                                request.AddJsonBody(payload);
-
-                                var response = await client.PostAsync<RestResponse>(request);
-
-                                if (response != null && (response.IsSuccessful || response.StatusCode == 0))
-                                {
-                                    Console.WriteLine($"API Yanıtı: {response.Content}");
-
-                                    using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
-                                    {
-                                        connection.Open();
-
-                                        string query = $@"
-                            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
-                            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
-
-                                        using (var command = new SqlCommand(query, connection))
-                                        {
-                                            command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
-                                            command.Parameters.AddWithValue("@CUSTOMERID", customer.ID);
-                                            command.Parameters.AddWithValue("@ATILANMESAJ", message);
-                                            command.Parameters.AddWithValue("@ATILANMESAJURL", dosyaUrlBirlesik);
-                                            command.ExecuteNonQuery();
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"API Hata: {response?.ErrorMessage}");
-                                }
-                            }
-                        }
-                        else
-                        {
-                            string dosyaUrlBirlesik = string.Join(",", dosyaYollari);
-
-                            for (int i = 0; i < dosyaYollari.Count; i++)
-                            {
-                                string dosyaUzantisi = Path.GetExtension(dosyaYollari[i]).ToLower();
-                                int messageType = 2; // Varsayılan olarak resim mesajı
-
-                                switch (dosyaUzantisi)
-                                {
-                                    case ".jpg":
-                                    case ".jpeg":
-                                    case ".png":
-                                    case ".gif":
-                                    case ".bmp":
-                                        messageType = 2; // Görsel mesaj
-                                        break;
-                                    case ".pdf":
-                                        messageType = 3; // Belge mesajı
-                                        break;
-                                    case ".mp3":
-                                    case ".wav":
-                                    case ".ogg":
-                                        messageType = 4; // Sesli mesaj
-                                        break;
-                                    case ".mp4":
-                                    case ".avi":
-                                    case ".mov":
-                                    case ".mkv":
-                                        messageType = 5; // Video mesajı
-                                        break;
-                                    default:
-                                        Console.WriteLine($"Desteklenmeyen dosya uzantısı: {dosyaUzantisi}");
-                                        continue; // Geçersiz uzantılarda döngüden devam et
-                                }
-
-                                var optionsx = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
-                                var clientx = new RestClient(optionsx);
-                                var requestx = new RestRequest("");
-                                requestx.AddHeader("accept", "application/json");
-                                requestx.AddHeader("Accept-Language", "tr");
-                                requestx.AddHeader("wapikey", firma.WAPIKEY);
-
-                                var payloadx = new
-                                {
-                                    type = messageType,
-                                    interval = 1,
-                                    autoblacklist = false,
-                                    blacklistlink = false,
-                                    numbers = customer.TELEFONNO,
-                                    message = "",
-                                    url = dosyaYollari[i]
-                                };
-
-                                requestx.AddJsonBody(payloadx);
-
-                                var responsex = await clientx.PostAsync<RestResponse>(requestx);
-                            }
-
-                            var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
-                            var client = new RestClient(options);
-                            var request = new RestRequest("");
-                            request.AddHeader("accept", "application/json");
-                            request.AddHeader("Accept-Language", "tr");
-                            request.AddHeader("wapikey", firma.WAPIKEY);
-
-                            var payload = new
-                            {
-                                type = 1,
-                                interval = 1,
-                                autoblacklist = false,
-                                blacklistlink = false,
-                                numbers = cleanedNumbers,
-                                message = message
-                            };
-
-                            request.AddJsonBody(payload);
-
-                            var response = await client.PostAsync<RestResponse>(request);
-
-                            if (response != null && (response.IsSuccessful || response.StatusCode == 0))
-                            {
-                                Console.WriteLine($"API Yanıtı: {response.Content}");
-
-                                using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
-                                {
-                                    connection.Open();
-
-                                    string query = $@"
-                            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
-                            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
-
-                                    using (var command = new SqlCommand(query, connection))
-                                    {
-                                        command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
-                                        command.Parameters.AddWithValue("@CUSTOMERID", customer.ID);
-                                        command.Parameters.AddWithValue("@ATILANMESAJ", message);
-                                        command.Parameters.AddWithValue("@ATILANMESAJURL", dosyaUrlBirlesik);
-                                        command.ExecuteNonQuery();
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                Console.WriteLine($"API Hata: {response?.ErrorMessage}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        string dosyaUrlBirlesik = string.Join(",", dosyaYollari);
-
-                        for (int i = 0; i < dosyaYollari.Count; i++)
-                        {
-                            string dosyaUzantisi = Path.GetExtension(dosyaYollari[i]).ToLower();
-                            int messageType = 2; // Varsayılan olarak resim mesajı
-
-                            switch (dosyaUzantisi)
-                            {
-                                case ".jpg":
-                                case ".jpeg":
-                                case ".png":
-                                case ".gif":
-                                case ".bmp":
-                                    messageType = 2; // Görsel mesaj
-                                    break;
-                                case ".pdf":
-                                    messageType = 3; // Belge mesajı
-                                    break;
-                                case ".mp3":
-                                case ".wav":
-                                case ".ogg":
-                                    messageType = 4; // Sesli mesaj
-                                    break;
-                                case ".mp4":
-                                case ".avi":
-                                case ".mov":
-                                case ".mkv":
-                                    messageType = 5; // Video mesajı
-                                    break;
-                                default:
-                                    Console.WriteLine($"Desteklenmeyen dosya uzantısı: {dosyaUzantisi}");
-                                    continue; // Geçersiz uzantılarda döngüden devam et
-                            }
-
-                            var optionsx = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
-                            var clientx = new RestClient(optionsx);
-                            var requestx = new RestRequest("");
-                            requestx.AddHeader("accept", "application/json");
-                            requestx.AddHeader("Accept-Language", "tr");
-                            requestx.AddHeader("wapikey", firma.WAPIKEY);
-
-                            var payloadx = new
-                            {
-                                type = messageType,
-                                interval = 1,
-                                autoblacklist = false,
-                                blacklistlink = false,
-                                numbers = customer.TELEFONNO,
-                                message = "",
-                                url = dosyaYollari[i]
-                            };
-
-                            requestx.AddJsonBody(payloadx);
-
-                            var responsex = await clientx.PostAsync<RestResponse>(requestx);
-                        }
-
-                        var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
-                        var client = new RestClient(options);
-                        var request = new RestRequest("");
-                        request.AddHeader("accept", "application/json");
-                        request.AddHeader("Accept-Language", "tr");
-                        request.AddHeader("wapikey", firma.WAPIKEY);
-
-                        var payload = new
-                        {
-                            type = 1,
-                            interval = 1,
-                            autoblacklist = false,
-                            blacklistlink = false,
-                            numbers = cleanedNumbers,
-                            message = message
-                        };
-
-                        request.AddJsonBody(payload);
-
-                        var response = await client.PostAsync<RestResponse>(request);
-
-                        if (response != null && (response.IsSuccessful || response.StatusCode == 0))
-                        {
-                            Console.WriteLine($"API Yanıtı: {response.Content}");
-
-                            using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
-                            {
-                                connection.Open();
-
-                                string query = $@"
-                            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
-                            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
-
-                                using (var command = new SqlCommand(query, connection))
-                                {
-                                    command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
-                                    command.Parameters.AddWithValue("@CUSTOMERID", customer.ID);
-                                    command.Parameters.AddWithValue("@ATILANMESAJ", message);
-                                    command.Parameters.AddWithValue("@ATILANMESAJURL", dosyaUrlBirlesik);
-                                    command.ExecuteNonQuery();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine($"API Hata: {response?.ErrorMessage}");
-                        }
-                    }
+                    await GonderimIslemi(customer.ID,customer.TELEFONNO, kisiyeOzelMesaj, dosyaYollari, tableName, firma);
                 }
+
                 return Json(new { Sonuc = true, Msg = "İşlem Başarılı!" });
             }
             catch (Exception ex)
             {
                 return Json(new { Sonuc = false, Msg = ex.Message });
+            }
+        }
+
+        private async Task GonderimIslemi(int customerId, string telefonNo, string mesaj, List<string> dosyaYollari, string tableName, W_FIRMS firma)
+        {
+            int maxRetry = 3;
+            int retryCount = 0;
+            bool success = false;
+
+            while (retryCount < maxRetry && !success)
+            {
+                try
+                {
+                    if (dosyaYollari.Count == 0)
+                    {
+                        success = await TekliMesajGonder(customerId, telefonNo, mesaj, tableName, firma);
+                    }
+                    else
+                    {
+                        success = await DosyaMesajGonder(customerId, telefonNo, mesaj, dosyaYollari, tableName, firma);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Hata: {ex.Message}, Tekrar Deneme: {retryCount + 1}");
+                }
+
+                if (!success)
+                {
+                    retryCount++;
+                    await Task.Delay(5000);
+                }
+            }
+
+            if (!success)
+            {
+                throw new Exception("Mesaj gönderimi başarısız oldu.");
+            }
+        }
+
+        private async Task<bool> TekliMesajGonder(int customerId, string telefonNo, string mesaj, string tableName, W_FIRMS firma)
+        {
+            var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
+            var client = new RestClient(options);
+            var request = new RestRequest("");
+            request.AddHeader("accept", "application/json");
+            request.AddHeader("Accept-Language", "tr");
+            request.AddHeader("wapikey", firma.WAPIKEY);
+
+            var payload = new
+            {
+                type = 1,
+                interval = 1,
+                autoblacklist = false,
+                blacklistlink = false,
+                numbers = telefonNo,
+                message = mesaj
+            };
+
+            request.AddJsonBody(payload);
+            var response = await client.PostAsync<RestResponse>(request);
+
+            if (response != null && (response.IsSuccessful || response.StatusCode == 0))
+            {
+                await SqlKayit(customerId, tableName, telefonNo, mesaj, "");
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task<bool> DosyaMesajGonder(int customerId, string telefonNo, string mesaj, List<string> dosyaYollari, string tableName, W_FIRMS firma)
+        {
+            foreach (var dosyaYolu in dosyaYollari)
+            {
+                var options = new RestClientOptions($"https://www.wapifly.com/api/{firma.APITELEFONNO}/send-message");
+                var client = new RestClient(options);
+                var request = new RestRequest("");
+                request.AddHeader("accept", "application/json");
+                request.AddHeader("Accept-Language", "tr");
+                request.AddHeader("wapikey", firma.WAPIKEY);
+
+                var payload = new
+                {
+                    type = 2,
+                    interval = 1,
+                    autoblacklist = false,
+                    blacklistlink = false,
+                    numbers = telefonNo,
+                    message = mesaj.Length <= 1024 ? mesaj : "",
+                    url = dosyaYolu
+                };
+
+                request.AddJsonBody(payload);
+                var response = await client.PostAsync<RestResponse>(request);
+
+                if (response == null || (!response.IsSuccessful && response.StatusCode != 0))
+                {
+                    return false;
+                }
+            }
+
+            await SqlKayit(customerId, tableName, telefonNo, mesaj, string.Join(",", dosyaYollari));
+            return true;
+        }
+
+        private async Task SqlKayit(int customerId, string tableName, string telefonNo, string mesaj, string dosyaUrl)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_configuration.GetConnectionString("AppDbContext")))
+                {
+                    connection.Open();
+
+                    string query = $@"
+            INSERT INTO {tableName} (MESAJTARIHI, CUSTOMERID, ATILANMESAJ, ATILANMESAJURL)
+            VALUES (@MESAJTARIHI, @CUSTOMERID, @ATILANMESAJ, @ATILANMESAJURL)";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@MESAJTARIHI", DateTime.Now);
+                        command.Parameters.AddWithValue("@CUSTOMERID", customerId);
+                        command.Parameters.AddWithValue("@ATILANMESAJ", mesaj);
+                        command.Parameters.AddWithValue("@ATILANMESAJURL", dosyaUrl);
+                        await command.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
             }
         }
 
