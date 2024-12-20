@@ -113,12 +113,12 @@
     </div>
 </div>
 
-<div class="modal" id="kurulumModal" tabindex="-1" aria-labelledby="kurulumModalLabel" aria-hidden="true">
+<div class="modal" id="kurulumModal" tabindex="-1" aria-labelledby="kurulumModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-right">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="card-title text-center mb-4">Firma Bilgileri</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="setFlagToZero()"></button>
             </div>
             <div class="modal-body">
                 <form>
@@ -153,7 +153,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-info text-light" onclick="login()" data-bs-dismiss="modal">Kaydet</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="setFlagToZero()">Kapat</button>
             </div>
         </div>
     </div>
@@ -183,7 +183,11 @@
             e.preventDefault();
             return false;
         }
-        return true;   t
+        return true;
+    }
+
+    function setFlagToZero() {
+        flag = "0";
     }
 
     function openVerificationModal() {
@@ -250,9 +254,10 @@
         $("#KULLANICISIFRESI_USER").val('');
         $("#GUVENLIKKODU_USER").val('');
 
-        flag = "0";
+        flag = "1";
     });
 
+   
     function validateInputs(flag) {
         const inputsToCheck = flag === "0" ? leftInputs : rightInputs;
 
